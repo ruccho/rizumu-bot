@@ -1,0 +1,8 @@
+{
+    "guilds": {
+        "<Server ID Here>": {
+            "id": "<Server ID Here>",
+            "commandVersion": 0
+        }
+    }
+}
