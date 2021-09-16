@@ -82,17 +82,18 @@ function refresh() {
     if (!video) return;
     console.log("Video found.");
     if (!bypass) return;
-    console.log("Video hooked!");
 
     const source = audioContext.createMediaElementSource(video);
     source.connect(bypass);
     //bypass.connect(audioContext.destination);
+    
+    console.log("Video hooked!");
 }
 
 async function initializeBypass(instanceId) {
     console.log("initializing bypass...");
-    const processorPath = 'bypass-processor.js';// isDevMode ? 'public/processor.js' : `${global.__dirname}/processor.js`;
-    const processorSource = await fsPromises.readFile(path.join(__dirname, processorPath)); // just a promisified version of fs.readFile
+    const processorPath = 'bypass-processor.js';
+    const processorSource = await fsPromises.readFile(path.join(__dirname, processorPath));
     const processorBlob = new Blob([processorSource.toString()], { type: 'text/javascript' });
     const processorURL = URL.createObjectURL(processorBlob);
 

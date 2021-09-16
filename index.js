@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path');
 const { Stream, Readable } = require('stream');
 const uuid = require('uuid')
@@ -19,6 +19,11 @@ const { discord_token } = require('./config.json');
 const Rizumu = require('./Rizumu');
 const state = require('./state.json');
 const commandRegisterer = require('./SlashCommandRegisterer')
+
+dialog.showErrorBox = function (title, content) {
+    console.log(`[MAIN] Electron error: ${title}: ${content}`);
+    process.exit(-1);
+};
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, 'GUILD_VOICE_STATES'] });
 
@@ -196,14 +201,13 @@ client.on('interactionCreate', async interaction => {
 
 client.on('voiceStateUpdate', (oldState, newState) => {
     //leaves
-    
+
     if (oldState.channel && oldState.channelId !== newState.channelId) {
         console.log(`[MAIN] A guild member has been moved from ${oldState.channelId} to ${newState.channelId}`);
 
         let realMemberCount = 0;
-        for(let member of oldState.channel.members)
-        {
-            if(!member[1].user.bot) realMemberCount++;
+        for (let member of oldState.channel.members) {
+            if (!member[1].user.bot) realMemberCount++;
         }
 
         console.log(`[MAIN] ${realMemberCount} real members`);
@@ -237,7 +241,15 @@ client.on('guildCreate', guild => {
     initializeForGuild(guild);
 });
 
-client.login(discord_token);
+(async () => {
+    try {
+        await client.login(discord_token);
+    } catch (error) {
+        console.log(error);
+        process.exit(-1);
+    }
+})();
+
 
 function initializeForGuild(guild) {
     let entry = state.guilds[guild.id];

@@ -11,14 +11,7 @@ var webview = document.getElementById('webview-main');
 webview.addEventListener("did-finish-load", function () {
     //webview.openDevTools();
     webview.send("initialize", instance_id);
-    //rizumu.send(`st-ready`, "");
 });
-
-/*
-webview.addEventListener('ipc-message', function (event) {
-    console.log(event["args"][0]);
-});
-*/
 
 webview.addEventListener('did-frame-finish-load', function (e) {
     console.log("[CHILD] did-frame-finish-load. isMainFrame: " + e.isMainFrame);
@@ -28,9 +21,11 @@ webview.addEventListener('did-frame-finish-load', function (e) {
     webview.send("refresh");
 });
 
+/*
 webview.addEventListener('console-message', function (e) {
-    //console.log('GUEST:', e.message)
+    console.log('GUEST:', e.message)
 });
+*/
 
 window.rizumu.on('op-play-watch', (urlStr) => {
     console.log("[CHILD] op-play-watch: " + urlStr);
