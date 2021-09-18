@@ -83,7 +83,7 @@ client.on('interactionCreate', async interaction => {
             //join voiceChannel
             const voiceChannel = interaction.member.voice.channel;
             if (!voiceChannel) {
-                await interaction.followUp(`ボイスチャンネルを取得できませんでした。`);
+                await interaction.editReply(`ボイスチャンネルを取得できませんでした。`);
                 return;
             }
             console.log("[MAIN] VoiceChannel: " + voiceChannel.id);
@@ -148,9 +148,11 @@ client.on('interactionCreate', async interaction => {
 
             try {
                 await guildState._rizumu.readyAsync();
-                guildState._rizumu.playUrl(url);
+                await guildState._rizumu.playUrlAsync(url, async progress => {
+                    //await interaction.editReply(progress.message);
+                });
             } catch (error) {
-                await interaction.followUp(`再生に失敗しました。`);
+                await interaction.editReply(`失敗しました。`);
                 throw error;
             }
             await interaction.followUp(`▶ ${url}`);

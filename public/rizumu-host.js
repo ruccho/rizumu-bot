@@ -8,39 +8,55 @@ console.log(instance_id);
 
 var webview = document.getElementById('webview-main');
 
-webview.addEventListener("did-finish-load", function () {
-    //webview.openDevTools();
-    webview.send("initialize", instance_id);
-});
+let isInitialized = false;
 
-webview.addEventListener('did-frame-finish-load', function (e) {
-    console.log("[CHILD] did-frame-finish-load. isMainFrame: " + e.isMainFrame);
-    if (e.isMainFrame) {
+webview.addEventListener("did-finish-load", function () {
+    
+    if (!isInitialized) {
+        webview.openDevTools();
+        webview.send("initialize", instance_id);
+        isInitialized = true;
+        return;
     }
-    console.log("[CHILD] refreshing")
-    webview.send("refresh");
+
+    webview.send("refresh", instance_id);
 });
 
 /*
-webview.addEventListener('console-message', function (e) {
-    console.log('GUEST:', e.message)
-});
+const events = [
+    "did-finish-load",
+    "did-fail-load",
+    "did-frame-finish-load",
+    "did-start-loading",
+    "did-stop-loading",
+    "did-attach",
+    "dom-ready",
+    "page-title-updated",
+    "will-navigate",
+    "will-start-navigation",
+    "did-navigate",
+    "did-frame-navigate",
+    "did-navigate-in-page",
+    "media-start-playing",
+    "media-paused"
+]
+
+for (let ev of events) {
+    let ev_cap = ev;
+    webview.addEventListener(ev, e => {
+        console.log("EVENT: " + ev_cap);
+        if (e) console.log(e);
+    })
+}
 */
 
 window.rizumu.on('op-play-watch', (urlStr) => {
     console.log("[CHILD] op-play-watch: " + urlStr);
     webview.loadURL(urlStr);
-    /*
-    const url = new URL(urlStr);
-    const watchId = url.searchParams.get('v');
-    if(!watchId) return;
-
-    webview.loadURL(`https://www.youtube.com/embed/${watchId}`);
-*/
 });
 
-window.rizumu.on('op-play-list', (url) => {
-    console.log("[CHILD] op-play-list: " + url);
+window.rizumu.on('op-fetch-list', (url) => {
+    console.log("[CHILD] op-fetch-list: " + url);
     webview.loadURL(url);
 });
 
