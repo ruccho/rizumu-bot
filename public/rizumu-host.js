@@ -55,12 +55,18 @@ for (let ev of events) {
 
 window.rizumu.on('op-play-watch', (urlStr) => {
     logRenderer("op-play-watch: " + urlStr);
-    webview.loadURL(urlStr);
+    const url = new URL(urlStr);
+    const watchId = url.searchParams.get('v');
+
+    const rebuiltUrl = `https://m.youtube.com/watch?app=m&v=${watchId}`;
+    webview.loadURL(rebuiltUrl);
 });
 
-window.rizumu.on('op-fetch-list', (url) => {
-    logRenderer("op-fetch-list: " + url);
-    webview.loadURL(url);
+window.rizumu.on('op-fetch-list', (listId) => {
+    logRenderer("op-fetch-list: " + listId);
+
+    const rebuiltUrl = `https://m.youtube.com/playlist?app=m&list=${listId}`;
+    webview.loadURL(rebuiltUrl);
 });
 
 webview.addEventListener('console-message', e => {

@@ -1,11 +1,11 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
-const { discord_token, discord_client_id } = require('./config.json');
+const { discord_token, discord_client_id, rizumu_command_prefix } = require('./config.json');
 
 const commands = [
     new SlashCommandBuilder()
-        .setName('rizumu')
+        .setName(rizumu_command_prefix)
         .setDescription('Rizumu botをコントロールします。')
         .addSubcommand(c => c
             .setName('play')
@@ -23,7 +23,7 @@ const commands = [
         .addSubcommand(c => c
             .setName('capture')
             .setDescription('現在のRizumuの画面を表示します。')
-        )/*
+        )
         .addSubcommand(c => c
             .setName('queue')
             .setDescription('現在の再生キューを表示します。')
@@ -35,7 +35,7 @@ const commands = [
         .addSubcommand(c => c
             .setName('info')
             .setDescription('再生中の曲の情報を表示します。')
-        )*/
+        )
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '9' }).setToken(discord_token);

@@ -53,7 +53,7 @@ class BypassProcessor extends AudioWorkletProcessor {
         let v = 0;
         for (let s = 0; s < f_input_channels[0].length; s++) {
             for (let c = 0; c < f_input_channels.length; c++) {
-                view[v] = Math.round(f_input_channels[c][s] * 32767);
+                view[v] = Math.round(f_input_channels[c][s] * 32767 * 0.2);
                 v++;
                 //f_input.push(f_input_channels[c][s]);
             }

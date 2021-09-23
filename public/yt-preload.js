@@ -27,24 +27,30 @@ ipcRenderer.on(`refresh`, async function (e, instanceId) {
     }
 });
 
-/*
-ipcRenderer.on(`play-next`, function () {
-    const nextButton = document.querySelector('a.ytp-next-button');
-    nextButton?.click();
-});
+function waitForElement(container, selector, subtree, callback) {
 
-/*
-ipcRenderer.on(`play-again`, function () {
-    const prevButton = document.querySelector('a.ytp-prev-button');
-    prevButton?.click();
-});
+    {
+        const target = container.querySelector(selector);
+        if (target) {
+            callback(target);
+            return;
+        }
+    }
 
-ipcRenderer.on(`play-prev`, function () {
-    const prevButton = document.querySelector('a.ytp-prev-button');
-    prevButton?.click();
-    setTimeout(() => { prevButton?.click(); }, 100);
-});
-*/
+    let observer;
+    observer = new MutationObserver(records => {
+        const target = container.querySelector(selector);
+        if (target) {
+            observer.disconnect();
+            callback(target);
+        }
+    })
+
+    observer.observe(container, {
+        childList: true,
+        subtree: subtree
+    });
+}
 
 let adSkipObserver;
 let popupObserver;
@@ -53,6 +59,11 @@ let autoplayObserver;
 function refreshWatch(instanceId) {
 
     console.log('Refreshing...');
+
+    const playContainer = document.querySelector('.ytp-cued-thumbnail-overlay');
+    if (playContainer) {
+        playContainer.querySelector('button')?.click();
+    }
 
     const video = document.querySelector('.html5-main-video');
 
@@ -76,14 +87,13 @@ function refreshWatch(instanceId) {
         };
 
         video.addEventListener('ended', onEnded);
-        
+
         video.addEventListener('pause', e => {
             console.log('Video paused.');
             console.log(`video duration: ${video.duration}, current: ${video.currentTime}, src: ${video.currentSrc}`);
 
             //when post-video ads skipped
-            if(isNaN(video.duration))
-            {
+            if (isNaN(video.duration)) {
                 console.log('Post-video ads skipped');
                 onEnded();
             }
@@ -91,6 +101,8 @@ function refreshWatch(instanceId) {
         });
     }
 
+    //for desktop
+    /*
     const adModule = document.querySelector('.video-ads.ytp-ad-module');
     if (adModule) {
         skipAds(adModule, video);
@@ -105,19 +117,36 @@ function refreshWatch(instanceId) {
         });
         console.log('Ad skipping hooked.');
     }
+    */
+
+    //for mobile 
+    waitForElement(document.querySelector('.html5-video-player'), '.video-ads.ytp-ad-module', false, (adModule) => {
+        skipAds(adModule, video);
+
+        if (adSkipObserver) adSkipObserver.disconnect();
+        adSkipObserver = new MutationObserver(records => {
+            skipAds(adModule, video);
+        })
+
+        adSkipObserver.observe(adModule, {
+            childList: true,
+            subtree: true,
+        });
+        console.log('Ad skipping hooked.');
+    });
 
     //自動再生をオフ
-    const autonavButton = document.querySelector('.ytp-autonav-toggle-button');
+    const autonavButton = document.querySelector('.ytm-autonav-toggle-button-container');
     if (autonavButton) {
         disableAutoplay();
-    }
+    } else console.log('Autonav button not found.')
 
     const popup = document.querySelector('ytd-popup-container');
     if (popup) {
 
         if (popupObserver) popupObserver.disconnect();
         popupObserver = new MutationObserver(records => {
-            
+
             const dialogs = popup.querySelectorAll('tp-yt-paper-dialog');
             for (let i = 0; i < dialogs.length; i++) {
                 let dialog = dialogs[i];
@@ -130,7 +159,7 @@ function refreshWatch(instanceId) {
                     }
                 }
             }
-            
+
         })
 
         popupObserver.observe(popup, {
@@ -174,35 +203,39 @@ function skipAds(adModule, video) {
     }
 }
 
-function disableAutoplay()
-{
-    const autonavButton = document.querySelector('.ytp-autonav-toggle-button');
-    const checked = autonavButton.getAttribute('aria-checked');
+function disableAutoplay() {
+    const autonavButton = document.querySelector('.ytm-autonav-toggle-button-container');
+    const checked = autonavButton.getAttribute('aria-pressed');
     if (checked === "true") {
-        const button = autonavButton.closest('button');
-        button.click();
+        //const button = autonavButton.closest('button');
+        autonavButton.click();
         console.log("Autoplay disabled.");
         setTimeout(disableAutoplay, 500);
     }
 }
 
 function refreshPlaylist(instanceId) {
-    
+
     console.log("Fetching playlist...");
-    const container = document.querySelector('div#contents.ytd-playlist-video-list-renderer');
-    if(!container)
-    {
+    const container = document.querySelector('ytm-app');//div#contents.ytd-playlist-video-list-renderer');
+    if (!container) {
         console.log("Inaccessible playlist!");
         ipcRenderer.send(`st-playlist-item-${instanceId}`, null);
         return;
     }
 
+    //10秒経っても始まらなければ完了あつかい
+    fetchPlaylistInitialTimeoutId = setTimeout(() => {
+        console.log("fetchPlaylistKernel timeout!")
+        ipcRenderer.send(`st-playlist-item-${instanceId}`, null);
+        if (fetchPlaylistTimeoutId) clearTimeout(fetchPlaylistTimeoutId);
+    }, 10000);
+
     fetchPlaylistKernel(container, 0, (complete, item) => {
-        if(complete)
-        {
+        if (complete) {
             console.log("playlist fully fetched!")
             ipcRenderer.send(`st-playlist-item-${instanceId}`, null);
-            clearTimeout(fetchPlaylistTimeoutId);
+            if (fetchPlaylistTimeoutId) clearTimeout(fetchPlaylistTimeoutId);
             return;
         }
 
@@ -211,10 +244,29 @@ function refreshPlaylist(instanceId) {
     });
 }
 
+let fetchPlaylistInitialTimeoutId;
 let fetchPlaylistTimeoutId;
 
 function fetchPlaylistKernel(container, position, callback) {
-    const children = container.children;
+    const innerContainer = container.querySelector('ytm-playlist-video-list-renderer');
+    if (!innerContainer) {
+
+        const alert = container.querySelector('ytm-alert-renderer');
+        if (alert) {
+            callback(true);
+            return;
+        }
+
+        fetchPlaylistTimeoutId = setTimeout(() => fetchPlaylistKernel(container, position, callback), 500);
+        return;
+    }
+    
+    if (fetchPlaylistInitialTimeoutId) {
+        clearTimeout(fetchPlaylistInitialTimeoutId);
+        fetchPlaylistInitialTimeoutId = void 0;
+    }
+
+    const children = innerContainer.children;
     let fetched = 0;
 
     const origin = new URL(location.origin);
@@ -223,28 +275,39 @@ function fetchPlaylistKernel(container, position, callback) {
     for (let i = position; i < children.length; i++) {
         const child = children.item(i);
         const tagName = child.tagName.toLowerCase();
-        if(tagName === 'ytd-continuation-item-renderer')
+        if (tagName === 'ytm-continuation-item-renderer')//'ytd-continuation-item-renderer')
         {
             isLoading = true;
             continue;
         }
-        if (tagName !== 'ytd-playlist-video-renderer') continue;
-        const link = child.querySelector('a#video-title');
-
-        if (!link) continue;
-
-        const href = link.href;
-        const title = link.getAttribute('title');
-        const url = new URL(href, origin);
-        const watchId = url.searchParams.get('v');
+        if (tagName !== 'ytm-playlist-video-renderer') continue;//'ytd-playlist-video-renderer') continue;
 
         fetched++;
-        callback(false,
-            {
-                type: 'YT_WATCH',
-                title: title,
-                watchId: watchId
-            });
+
+
+        try {
+
+            const link = child.querySelector('a.compact-media-item-metadata-content')//'a#video-title');
+
+            if (!link) continue;
+
+            const href = link.href;
+            const title = link.querySelector('.compact-media-item-headline').innerText;//link.getAttribute('title');
+            const url = new URL(href, origin);
+            const watchId = url.searchParams.get('v');
+            const channel = link.querySelector('.compact-media-item-byline').innerText;
+
+            callback(false,
+                {
+                    type: 'YT_WATCH',
+                    title: title,
+                    watchId: watchId,
+                    channel: channel
+                });
+        } catch (error) {
+            console.error(error);
+            continue;
+        }
 
     }
 
@@ -278,11 +341,11 @@ async function initializeBypass(instanceId) {
 
     console.log("Send to: " + `audio-data-${instanceId}`)
 
-    
+
     bypass.port.onmessage = e => {
         ipcRenderer.send(`audio-data-${instanceId}`, e.data);
     };
-    
+
 }
 
 class BypassNode extends AudioWorkletNode {
