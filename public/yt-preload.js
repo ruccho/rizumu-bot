@@ -27,11 +27,13 @@ ipcRenderer.on(`refresh`, async function (e, instanceId) {
     }
 });
 
+/*
 ipcRenderer.on(`play-next`, function () {
     const nextButton = document.querySelector('a.ytp-next-button');
     nextButton?.click();
 });
 
+/*
 ipcRenderer.on(`play-again`, function () {
     const prevButton = document.querySelector('a.ytp-prev-button');
     prevButton?.click();
@@ -42,13 +44,15 @@ ipcRenderer.on(`play-prev`, function () {
     prevButton?.click();
     setTimeout(() => { prevButton?.click(); }, 100);
 });
+*/
 
 let adSkipObserver;
 let popupObserver;
 let videoObserver;
+let autoplayObserver;
 function refreshWatch(instanceId) {
 
-    console.log('Refreshing...')
+    console.log('Refreshing...');
 
     const video = document.querySelector('.html5-main-video');
 
@@ -66,8 +70,24 @@ function refreshWatch(instanceId) {
             attributeFilter: ['src']
         });
 
-        video.addEventListener('ended', e => {
+        const onEnded = () => {
+            console.log('Video ended.');
             ipcRenderer.send(`st-video-end-${instanceId}`, null);
+        };
+
+        video.addEventListener('ended', onEnded);
+        
+        video.addEventListener('pause', e => {
+            console.log('Video paused.');
+            console.log(`video duration: ${video.duration}, current: ${video.currentTime}, src: ${video.currentSrc}`);
+
+            //when post-video ads skipped
+            if(isNaN(video.duration))
+            {
+                console.log('Post-video ads skipped');
+                onEnded();
+            }
+            //ipcRenderer.send(`st-video-end-${instanceId}`, null);
         });
     }
 
@@ -83,24 +103,21 @@ function refreshWatch(instanceId) {
         adSkipObserver.observe(adModule, {
             childList: true
         });
-        console.log('Ad skipping hooked!');
+        console.log('Ad skipping hooked.');
     }
 
     //自動再生をオフ
     const autonavButton = document.querySelector('.ytp-autonav-toggle-button');
     if (autonavButton) {
-        if (autonavButton.getAttribute('aria-checked') === "true") {
-            autonavButton.click();
-        }
+        disableAutoplay();
     }
-
-
 
     const popup = document.querySelector('ytd-popup-container');
     if (popup) {
 
         if (popupObserver) popupObserver.disconnect();
         popupObserver = new MutationObserver(records => {
+            
             const dialogs = popup.querySelectorAll('tp-yt-paper-dialog');
             for (let i = 0; i < dialogs.length; i++) {
                 let dialog = dialogs[i];
@@ -109,32 +126,32 @@ function refreshWatch(instanceId) {
                     if (b) {
                         b.click();
                         popupObserver.disconnect();
-                        console.log('Confirm skipped!')
+                        console.log('Confirmation skipped!');
                     }
                 }
             }
+            
         })
 
         popupObserver.observe(popup, {
             attributes: true,
             subtree: true,
         });
-        console.log('Confirm hooked!')
+        console.log('Confirmation hooked.');
     }
 }
 
 function hookVideo(video) {
     if (!video) return;
-    console.log("Video found.");
     if (!bypass) return;
 
     try {
         const source = audioContext.createMediaElementSource(video);
         source.connect(bypass);
         //bypass.connect(audioContext.destination);
-        console.log("Video hooked!");
+        console.log("Bypass connected!");
     } catch (error) {
-        console.log("Failed to hook video");
+        console.log("Failed to connect bypass.");
     }
 }
 
@@ -145,24 +162,38 @@ function skipAds(adModule, video) {
         const skipButton = adPlayer.querySelector('.ytp-ad-skip-button');
 
         if (skipButton) {
-            console.log("Ad skipped by clicking the button");
+            console.log("Ad skipped by clicking the button.");
             skipButton.click();
             return;
         }
 
         if (video) {
-            console.log("Ad skipped by seeking");
+            console.log("Ad skipped by seeking.");
             video.currentTime = 300;
         }
     }
 }
 
+function disableAutoplay()
+{
+    const autonavButton = document.querySelector('.ytp-autonav-toggle-button');
+    const checked = autonavButton.getAttribute('aria-checked');
+    if (checked === "true") {
+        const button = autonavButton.closest('button');
+        button.click();
+        console.log("Autoplay disabled.");
+        setTimeout(disableAutoplay, 500);
+    }
+}
+
 function refreshPlaylist(instanceId) {
     
+    console.log("Fetching playlist...");
     const container = document.querySelector('div#contents.ytd-playlist-video-list-renderer');
     if(!container)
     {
         console.log("Inaccessible playlist!");
+        ipcRenderer.send(`st-playlist-item-${instanceId}`, null);
         return;
     }
 
@@ -208,7 +239,6 @@ function fetchPlaylistKernel(container, position, callback) {
         const watchId = url.searchParams.get('v');
 
         fetched++;
-        //console.log(`New Playlist item: ${title}, ${href}`);
         callback(false,
             {
                 type: 'YT_WATCH',
@@ -218,7 +248,7 @@ function fetchPlaylistKernel(container, position, callback) {
 
     }
 
-    console.log(`fetched: ${fetched}, isLoading: ${isLoading}`);
+    console.log(`Items fetched from the playlist: ${fetched}, isLoading: ${isLoading}`);
 
     if (fetched == 0 && !isLoading) {
         callback(true);
@@ -240,15 +270,19 @@ async function initializeBypass(instanceId) {
 
     console.log(processorURL);
 
+    console.log(require.resolve('electron'));
+
     await audioContext.audioWorklet.addModule(processorURL);
     console.log("Bypass created");
     bypass = new BypassNode(audioContext);
 
     console.log("Send to: " + `audio-data-${instanceId}`)
 
+    
     bypass.port.onmessage = e => {
         ipcRenderer.send(`audio-data-${instanceId}`, e.data);
     };
+    
 }
 
 class BypassNode extends AudioWorkletNode {

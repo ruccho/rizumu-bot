@@ -1,25 +1,28 @@
 
-console.log('yt-host');
+logRenderer('yt-host');
 
 let params = new URLSearchParams(location.search);
 const instance_id = params.get('instance_id');
 
-console.log(instance_id);
+logRenderer(instance_id);
 
 var webview = document.getElementById('webview-main');
 
 let isInitialized = false;
 
 webview.addEventListener("did-finish-load", function () {
-    
+
     if (!isInitialized) {
-        webview.openDevTools();
+        //webview.openDevTools();
         webview.send("initialize", instance_id);
         isInitialized = true;
         return;
     }
 
     webview.send("refresh", instance_id);
+    window.rizumu.send('st-url-changed', {
+        url: webview.getURL()
+    })
 });
 
 /*
@@ -51,27 +54,32 @@ for (let ev of events) {
 */
 
 window.rizumu.on('op-play-watch', (urlStr) => {
-    console.log("[CHILD] op-play-watch: " + urlStr);
+    logRenderer("op-play-watch: " + urlStr);
     webview.loadURL(urlStr);
 });
 
 window.rizumu.on('op-fetch-list', (url) => {
-    console.log("[CHILD] op-fetch-list: " + url);
+    logRenderer("op-fetch-list: " + url);
     webview.loadURL(url);
 });
 
-window.rizumu.on('op-play-next', () => {
-    console.log("[CHILD] op-play-next");
-    webview.send("play-next");
-});
+webview.addEventListener('console-message', e => {
+    logWebview(e.message, e.level);
+})
 
-window.rizumu.on('op-play-again', () => {
-    console.log("[CHILD] op-play-again");
-    webview.send("play-again");
-});
+function logRenderer(message) {
+    console.log(`[RENDERER] ${message}`)
+    window.rizumu.send('st-console-message', {message: `[RENDERER] ${message}`});
+}
 
-window.rizumu.on('op-play-prev', () => {
-    console.log("[CHILD] op-play-prev");
-    webview.send("play-prev");
-});
-
+function logWebview(message, level) {
+    window.rizumu.send('st-console-message', {message: `[WEBVIEW] ${message}`});
+    if (level === void 0 || level === 0)
+        console.log(`[WEBVIEW] ${message}`)
+    else if (level === 1)
+        console.info(`[WEBVIEW] ${message}`)
+    else if (level === 1)
+        console.warn(`[WEBVIEW] ${message}`)
+    else if (level === 1)
+        console.error(`[WEBVIEW] ${message}`)
+}

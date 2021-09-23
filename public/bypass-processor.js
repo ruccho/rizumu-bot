@@ -40,28 +40,28 @@ class BypassProcessor extends AudioWorkletProcessor {
                 }
 
             }
-            /*
-            if (outputs[i].length >= 2) {
-                for (let j = 0; j < outputs[i][0].length; j++) {
-                    outputs[i][0][j] = f_input[j];
-                }
-
-                for (let j = 0; j < outputs[i][1].length; j++) {
-                    outputs[i][1][j] = f_input[j];
-                }
-            }
-            */
         }
+
+        //Int16 x samples x channels
+        const bufferBytes = 2 * f_input_channels[0].length * f_input_channels.length;
+        if (!this.buffer || this.buffer.byteLength != bufferBytes)
+            this.buffer = new ArrayBuffer(bufferBytes);
+        const view = new Int16Array(this.buffer);
 
         //flatten
-        let f_input = []
+        //let f_input = []
+        let v = 0;
         for (let s = 0; s < f_input_channels[0].length; s++) {
             for (let c = 0; c < f_input_channels.length; c++) {
-                f_input.push(f_input_channels[c][s]);
+                view[v] = Math.round(f_input_channels[c][s] * 32767);
+                v++;
+                //f_input.push(f_input_channels[c][s]);
             }
         }
 
-        this.port.postMessage(f_input);
+
+        this.port.postMessage(this.buffer);
+        //this.port.postMessage(f_input);
 
         // 処理を続ける
         return true;

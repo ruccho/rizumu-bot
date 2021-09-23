@@ -9,7 +9,7 @@ const commands = [
         .setDescription('Rizumu botをコントロールします。')
         .addSubcommand(c => c
             .setName('play')
-            .setDescription('動画またはプレイリストを再生します。')
+            .setDescription('動画またはプレイリストをキューに追加して再生します。')
             .addStringOption(option => option.setName('url').setDescription('再生するYouTube URL').setRequired(true))
         )
         .addSubcommand(c => c
@@ -17,17 +17,25 @@ const commands = [
             .setDescription('現在のボイスチャンネルを退出します。')
         )
         .addSubcommand(c => c
-            .setName('prev')
-            .setDescription('前の曲に戻ります。')
-        )
-        .addSubcommand(c => c
-            .setName('again')
-            .setDescription('現在の曲を再度再生します。')
-        )
-        .addSubcommand(c => c
             .setName('next')
             .setDescription('次の曲へ移ります。')
         )
+        .addSubcommand(c => c
+            .setName('capture')
+            .setDescription('現在のRizumuの画面を表示します。')
+        )/*
+        .addSubcommand(c => c
+            .setName('queue')
+            .setDescription('現在の再生キューを表示します。')
+        )
+        .addSubcommand(c => c
+            .setName('clear')
+            .setDescription('再生キューをクリアします。')
+        )
+        .addSubcommand(c => c
+            .setName('info')
+            .setDescription('再生中の曲の情報を表示します。')
+        )*/
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '9' }).setToken(discord_token);
@@ -35,14 +43,10 @@ const clientId = discord_client_id;
 
 class SlashCommandRegisterer {
 
-    getVersion() {
-        return 1;
-    }
-
-    async register(guildId) {
+    async register() {
         try {
             await rest.put(
-                Routes.applicationGuildCommands(clientId, guildId),
+                Routes.applicationCommands(clientId),
                 { body: commands },
             );
 
@@ -51,7 +55,6 @@ class SlashCommandRegisterer {
             console.error('[MAIN] ' + error);
         }
     }
-
 }
 
 module.exports = new SlashCommandRegisterer();

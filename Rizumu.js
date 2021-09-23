@@ -1,36 +1,41 @@
+const { AudioPlayerStatus, createAudioPlayer, NoSubscriberBehavior, createAudioResource, StreamType } = require('@discordjs/voice');
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path');
 const { Stream, Readable } = require('stream');
 const uuid = require('uuid')
-
 
 class Rizumu {
     constructor() {
         const instanceId = uuid.v4();
 
         this._instanceId = instanceId;
-        this._audioStream = new Readable({
-            read() { }
-        });
 
         const win = new BrowserWindow({
-            width: 800,
-            height: 600,
-            //show: false,
+            width: 450,
+            height: 400,
+            show: false,
             webPreferences: {
                 preload: path.join(__dirname, 'rizumu-preload.js'),
-                webviewTag: true
+                webviewTag: true,
+                offscreen: true,
             }
         })
 
-        var url = 'file://' + path.join(__dirname + `/public/default.html?instance_id=${instanceId}`);
+        win.webContents.setFrameRate(1)
+
+        const url = 'file://' + path.join(__dirname + `/public/default.html?instance_id=${instanceId}`);
         win.loadURL(url);
 
-        console.log("[RIZUMU] audio-data listening on " + `audio-data-${instanceId}`);
+        ipcMain.on(`st-console-message-${instanceId}`, (e, arg) => {
+            console.log(`[${instanceId}] ${arg.message}`);
+        });
+
+        this._log("audio-data listening on " + `audio-data-${instanceId}`);
         ipcMain.on(`audio-data-${instanceId}`, (event, arg) => {
 
             if (!arg) return;
 
+            /*
             const samples = arg;
 
             let sum = 0;
@@ -41,13 +46,16 @@ class Rizumu {
             }
 
             const samplesArray = Int16Array.from(samples);
-            const samplesBuffer = Buffer.from(samplesArray.buffer);
+            */
+            const arrayBuffer = arg;
+
+            const samplesBuffer = Buffer.from(arrayBuffer);
 
             this._audioStream.push(samplesBuffer);
         });
 
         this._onApi('st-ready', arg => {
-            console.log("[RIZUMU] ready")
+            this._log("ready")
             this._isReady = true;
             for (let res of this._onReady) {
                 res();
@@ -57,7 +65,7 @@ class Rizumu {
 
         this._onApi('st-playlist-item', item => {
             if (item) {
-                console.log(`[RIZUMU] Playlist item: ${item.title}`);
+                this._log(`Playlist item: ${item.title}`);
                 if (item.type === 'YT_WATCH') {
                     this._queue.push(item);
                 }
@@ -66,7 +74,7 @@ class Rizumu {
                 }
             } else {
                 //completed
-                console.log('[RIZUMU] The list fully fetched');
+                this._log('The list fully fetched');
                 for (let res of this._onFetchCompleted) {
                     res();
                 }
@@ -75,8 +83,17 @@ class Rizumu {
         });
 
         this._onApi('st-video-end', () => {
+            this._log(`st-video-end`);
             this._playingItem = null;
             this._updatePlayingItem();
+        });
+
+        this._onApi('st-url-changed', data => {
+            this._log(`st-url-changed ${data.url}`);
+            for (let res of this._onUrlChanged) {
+                res(data.url);
+            }
+            this._onUrlChanged.splice(0);
         });
 
 
@@ -89,9 +106,66 @@ class Rizumu {
         this._onFetchCompleted = [];
         this._onFetchItem = [];
         this._playingItem = null;
+        this._onUrlChanged = [];
+    }
+
+    getAudioPlayer() {
+        if (this._player) return this._player;
+
+        const player = createAudioPlayer({
+            behaviors: {
+                noSubscriber: NoSubscriberBehavior.Play,
+                maxMissedFrames: 5000 / 20
+            }
+        });
+
+        player.on('error', error => {
+            this._log(error);
+        });
+
+        player.on(AudioPlayerStatus.Idle, () => {
+            this._log('[MAIN] AudioPlayer: Idle');
+            this._renewAudioResource();
+        });
+
+        player.on(AudioPlayerStatus.Buffering, () => {
+            this._log('[MAIN] AudioPlayer: Buffering');
+        });
+
+        player.on(AudioPlayerStatus.Playing, () => {
+            this._log('[MAIN] AudioPlayer: Playing');
+        });
+
+        player.on(AudioPlayerStatus.AutoPaused, () => {
+            this._log('[MAIN] AudioPlayer: AutoPaused');
+        });
+
+        player.on(AudioPlayerStatus.Paused, () => {
+            this._log('[MAIN] AudioPlayer: Paused');
+        });
+
+        this._player = player;
+        this._renewAudioResource();
+
+        return this._player;
+    }
+
+    _renewAudioResource() {
+        const rawStream = this.getAudioStream();
+
+        const resource = createAudioResource(rawStream, {
+            inputType: StreamType.Raw,
+            inlineVolume: true
+        });
+        resource.volume.setVolume(0.2);
+
+        this._player.play(resource);
     }
 
     getAudioStream() {
+        this._audioStream = new Readable({
+            read() { }
+        });
         return this._audioStream;
     }
 
@@ -118,6 +192,14 @@ class Rizumu {
         }
     }
 
+    captureAsync() {
+        return new Promise((res, rej) => {
+            this._window.webContents.once('paint', (event, dirty, image) => {
+                res(image.toPNG());
+            });
+        });
+    }
+
     async playUrlAsync(url, progress) {
         if (this._isBusy) {
             throw new Error('別の処理が実行中です。');
@@ -131,6 +213,7 @@ class Rizumu {
 
             if (url.pathname === '/watch') {
                 //watch url
+                progress?.({ message: '動画を再生...' });
                 await this._playWatchAsync(url, progress);
             } else if (url.pathname === '/playlist') {
                 //playlist url
@@ -150,16 +233,34 @@ class Rizumu {
 
     async moveQueueAsync(position) {
         if (position >= 0) this._queue.splice(0, position);
-        if (this._queue.length > 0) await this._playItemAsync(this._queue[0]);
-        this._queue.splice(0, 1);
+        if (this._queue.length > 0) {
+            await this._playItemAsync(this._queue[0]);
+            this._queue.splice(0, 1);
+        }
     }
 
     async _playItemAsync(item) {
         if (item.type === 'YT_WATCH') {
+            let urlStr = `https://www.youtube.com/watch?v=${item.watchId}`;
+            this._log(`playing ${urlStr}`);
             this._playingItem = item;
-            this._sendApi('op-play-watch', `https://www.youtube.com/watch?v=${item.watchId}`);
-            //TODO: wait for video start
+            this._sendApi('op-play-watch', urlStr);
+            urlStr = await this._waitForUrlAsync();
+            const url = new URL(urlStr);
+            if (url.pathname !== '/watch' ||
+                url.searchParams.get('v') !== item.watchId)
+                throw new Error('正しく再生されませんでした。');
         }
+    }
+
+    _waitForUrlAsync() {
+        this._log(`_waitForUrlAsync(): waiting for next url`);
+        return new Promise((res, rej) => {
+            this._onUrlChanged.push((url) => {
+                this._log(`_waitForUrlAsync(): resolved: ${url}`);
+                res(url);
+            });
+        })
     }
 
     async _enqueueItem(item) {
@@ -167,19 +268,46 @@ class Rizumu {
     }
 
     async _playWatchAsync(url, progress) {
-        this._playingItem = null;
-        this._sendApi('op-play-watch', url.href);
+        const watchId = url.searchParams.get('v');
+        const item = {
+            type: 'YT_WATCH',
+            watchId: watchId,
+            title: '(Unknown)'
+        }
+        this._queue.push(item);
+        this._updatePlayingItem();
     }
 
     _fetchListAsync(url, progress) {
         const playing = this._playingItem;
         this._playingItem = null;
+        progress?.({ message: '再生リストをフェッチ中...' });
+
+        let count = 0;
+        const onItem = item => {
+            count++;
+            if (count % 100 == 0) {
+                progress?.({ message: `再生リストをフェッチ中: ${count} アイテム` });
+            }
+        }
+        this._onFetchItem.push(onItem);
+
         const p = new Promise((res, rej) => {
             this._onFetchCompleted.push(async () => {
-                if (playing) {
-                    await this._playItemAsync(playing);
-                } else {
-                    await this._updatePlayingItem();
+                try {
+                    progress?.({ message: `フェッチ完了: ${count} アイテム 動画を再生...` });
+                    if (playing) {
+                        await this._playItemAsync(playing);
+                    } else {
+                        await this._updatePlayingItem();
+                    }
+                } catch (error) {
+                    rej(error);
+                } finally {
+                    this._onFetchItem.splice(
+                        this._onFetchItem.findIndex(v => v == onItem),
+                        1
+                    );
                 }
                 res();
             });
@@ -200,6 +328,10 @@ class Rizumu {
         ipcMain.on(channel, (event, arg) => {
             listener(arg);
         });
+    }
+
+    _log(message) {
+        console.log(`[${this._instanceId}] [RIZUMU] ${message}`)
     }
 }
 

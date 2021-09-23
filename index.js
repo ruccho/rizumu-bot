@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path');
 const { Stream, Readable } = require('stream');
 const uuid = require('uuid')
-const { Client, Intents } = require('discord.js');
+const { Client, Intents, MessageEmbed, MessageAttachment } = require('discord.js');
 const {
     VoiceConnectionStatus,
     AudioPlayerStatus,
@@ -19,6 +19,8 @@ const { discord_token } = require('./config.json');
 const Rizumu = require('./Rizumu');
 const state = require('./state.json');
 const commandRegisterer = require('./SlashCommandRegisterer')
+
+//app.disableHardwareAcceleration();
 
 dialog.showErrorBox = function (title, content) {
     console.log(`[MAIN] Electron error: ${title}: ${content}`);
@@ -40,9 +42,7 @@ intiializeElectron();
 
 client.once('ready', () => {
     console.log('[MAIN] Discord client ready!');
-    client.guilds.cache.each(guild => {
-        initializeForGuild(guild);
-    });
+    commandRegisterer.register();
 });
 
 client.on('interactionCreate', async interaction => {
@@ -65,7 +65,11 @@ client.on('interactionCreate', async interaction => {
                 guildState._player = null;
             }
 
-            await interaction.reply("退出しました。");
+            let em = new MessageEmbed()
+                .setDescription('退出しました。')
+                .setColor('GREY');
+
+            await interaction.reply({ embeds: [em] });
 
         } else if (subcommand === 'play') {
 
@@ -73,17 +77,32 @@ client.on('interactionCreate', async interaction => {
             console.log(urlStr);
             const url = new URL(urlStr);
 
-            await interaction.reply(`▶ Loading... `);
+            let em;
+            em = new MessageEmbed()
+                .setDescription('▶ 接続中...')
+                .setColor('GREY');
+            await interaction.reply({ embeds: [em] });
 
             const guild = interaction.guild;
             const guildId = guild.id;
             const guildState = getGuildState(guildId);
-            if (!guildState) return;
+            if (!guildState) {
+                em = new MessageEmbed()
+                    .setTitle('❌ エラー')
+                    .setDescription('このサーバーでは現在Rizumuを使用できません。')
+                    .setColor('RED');
+                await interaction.followUp({ embeds: [em] });
+                return;
+            }
 
             //join voiceChannel
             const voiceChannel = interaction.member.voice.channel;
             if (!voiceChannel) {
-                await interaction.editReply(`ボイスチャンネルを取得できませんでした。`);
+                em = new MessageEmbed()
+                    .setTitle('❌ エラー')
+                    .setDescription('ボイスチャンネルに参加してから使用してください。')
+                    .setColor('RED');
+                await interaction.followUp({ embeds: [em] });
                 return;
             }
             console.log("[MAIN] VoiceChannel: " + voiceChannel.id);
@@ -125,78 +144,108 @@ client.on('interactionCreate', async interaction => {
             }
 
             if (!guildState._rizumu || !guildState._rizumu.isAlive()) {
+
+                em = new MessageEmbed()
+                    .setDescription('▶ Rizumuを起動中...')
+                    .setColor('GREY');
+                await interaction.editReply({ embeds: [em] });
+
                 console.log('[MAIN] Creating Rizumu instance...');
                 guildState._rizumu = new Rizumu();
-                guildState._player = createAudioPlayer({
-                    behaviors: {
-                        noSubscriber: NoSubscriberBehavior.Play,
-                        maxMissedFrames: 5000 / 20
-                    }
-                });
-
-                const rawStream = guildState._rizumu.getAudioStream();
-
-                guildState._audioResouce = createAudioResource(rawStream, {
-                    inputType: StreamType.Raw,
-                    inlineVolume: true
-                });
-                guildState._audioResouce.volume.setVolume(0.2);
-
-                guildState._player.play(guildState._audioResouce);
             }
-            connection.subscribe(guildState._player);
+            
+            connection.subscribe(guildState._rizumu.getAudioPlayer());
 
             try {
                 await guildState._rizumu.readyAsync();
+
                 await guildState._rizumu.playUrlAsync(url, async progress => {
-                    //await interaction.editReply(progress.message);
+                    em = new MessageEmbed()
+                        .setDescription(`▶ ${progress.message}`)
+                        .setColor('GREY');
+                    await interaction.editReply({ embeds: [em] });
                 });
             } catch (error) {
-                await interaction.editReply(`失敗しました。`);
+                em = new MessageEmbed()
+                    .setTitle('❌ エラー')
+                    .setDescription('失敗しました。')
+                    .setColor('RED');
+                await interaction.followUp({ embeds: [em] });
                 throw error;
             }
-            await interaction.followUp(`▶ ${url}`);
+            em = new MessageEmbed()
+                .setTitle('▶ 完了')
+                .setDescription('アイテムがキューに追加されました。')
+                .addField('追加されたアイテム', urlStr)
+                .setColor('AQUA');
+            await interaction.editReply({ embeds: [em] });
 
 
         } else if (subcommand === 'next') {
             const guild = interaction.guild;
             const guildId = guild.id;
             const guildState = getGuildState(guildId);
-            if (!guildState) return;
-
-            if (!guildState._rizumu || !guildState._rizumu.isAlive()) {
-                await interaction.reply(`何も再生していません。`);
+            let em;
+            if (!guildState) {
+                em = new MessageEmbed()
+                    .setTitle('❌ エラー')
+                    .setDescription('このサーバーでは現在Rizumuを使用できません。')
+                    .setColor('RED');
+                await interaction.reply({ embeds: [em] });
                 return;
             }
 
-            guildState._rizumu.playNext();
-            await interaction.reply(`⏭`);
-        } else if (subcommand === 'again') {
+            if (!guildState._rizumu || !guildState._rizumu.isAlive()) {
+                em = new MessageEmbed()
+                    .setDescription(`なにも再生していません。`)
+                    .setColor('GREY');
+                await interaction.reply({ embeds: [em] });
+                return;
+            }
+
+            em = new MessageEmbed()
+                .setDescription(`⏭ Loading...`)
+                .setColor('GREY');
+            await interaction.reply({ embeds: [em] });
+            await guildState._rizumu.moveQueueAsync(0);
+            em = new MessageEmbed()
+                .setDescription(`⏭`)
+                .setColor('AQUA');
+            await interaction.editReply({ embeds: [em] });
+        } else if (subcommand === 'capture') {
             const guild = interaction.guild;
             const guildId = guild.id;
             const guildState = getGuildState(guildId);
-            if (!guildState) return;
-
-            if (!guildState._rizumu || !guildState._rizumu.isAlive()) {
-                await interaction.reply(`何も再生していません。`);
+            let em;
+            if (!guildState) {
+                em = new MessageEmbed()
+                    .setTitle('❌ エラー')
+                    .setDescription('このサーバーでは現在Rizumuを使用できません。')
+                    .setColor('RED');
+                await interaction.reply({ embeds: [em] });
                 return;
             }
 
-            guildState._rizumu.playAgain();
-            await interaction.reply(`⏮`);
-        } else if (subcommand === 'prev') {
-            const guild = interaction.guild;
-            const guildId = guild.id;
-            const guildState = getGuildState(guildId);
-            if (!guildState) return;
 
             if (!guildState._rizumu || !guildState._rizumu.isAlive()) {
-                await interaction.reply(`何も再生していません。`);
+                em = new MessageEmbed()
+                    .setTitle('❌ エラー')
+                    .setDescription('Rizumuが非アクティブです。')
+                    .setColor('RED');
+                await interaction.reply({ embeds: [em] });
                 return;
             }
+            em = new MessageEmbed()
+                .setDescription('キャプチャを作成中...')
+                .setColor('GREY');
+            await interaction.reply({ embeds: [em] });
 
-            guildState._rizumu.playPrev();
-            await interaction.reply(`⏮⏮`);
+            const pngBytes = await guildState._rizumu.captureAsync();
+
+            const filename = `temp/capture_${guildState._rizumu._instanceId}.png`;
+            const file = new MessageAttachment(pngBytes, filename);
+
+            await interaction.followUp({ files: [file] });
         }
     }
 });
@@ -238,11 +287,6 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     }
 });
 
-client.on('guildCreate', guild => {
-    console.log("[MAIN] New Guild");
-    initializeForGuild(guild);
-});
-
 (async () => {
     try {
         await client.login(discord_token);
@@ -251,19 +295,6 @@ client.on('guildCreate', guild => {
         process.exit(-1);
     }
 })();
-
-
-function initializeForGuild(guild) {
-    let entry = state.guilds[guild.id];
-    if (entry) {
-        if (entry.commandVersion < commandRegisterer.getVersion()) {
-            commandRegisterer.register(guild.id);
-            console.log(`[MAIN] Command registered: ${guild.name}`);
-        }
-    } else {
-        console.log(`[MAIN] Unregistered guild: ${guild.name}`);
-    }
-}
 
 function getGuildState(guildId) {
     let entry = state.guilds[guildId];
