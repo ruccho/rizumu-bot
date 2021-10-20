@@ -36,6 +36,14 @@ const commands = [
             .setName('info')
             .setDescription('再生中の曲の情報を表示します。')
         )
+        .addSubcommand(c => c
+            .setName('shuffle')
+            .setDescription('現在のキューをシャッフルします。')
+        )
+        .addSubcommand(c => c
+            .setName('loop')
+            .setDescription('現在の曲をループ再生します。')
+        )
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '9' }).setToken(discord_token);

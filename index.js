@@ -303,6 +303,55 @@ client.on('interactionCreate', async interaction => {
                 .setColor('AQUA');
 
             await interaction.reply({ embeds: [em] });
+        } else if(subcommand === 'shuffle'){
+
+            const guild = interaction.guild;
+            const guildId = guild.id;
+            const guildState = await validateGuildState(interaction);
+            if (!guildState) return;
+
+            let em;
+
+            if (!guildState._rizumu || !guildState._rizumu.isAlive()) {
+                await interaction.reply({ embeds: [getErrorEmbed('なにも再生していません。')] });
+                return;
+            }
+
+            const queue = guildState._rizumu.getQueue();
+
+            for (let i = queue.length - 1; i >= 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [queue[i], queue[j]] = [queue[j], queue[i]];
+              }
+            
+            em = new MessageEmbed()
+                .setTitle('キューをシャッフルしました。')
+                .setColor('AQUA');
+
+            await interaction.reply({ embeds: [em] });
+        }else if(subcommand === 'loop'){
+
+            const guild = interaction.guild;
+            const guildId = guild.id;
+            const guildState = await validateGuildState(interaction);
+            if (!guildState) return;
+
+            let em;
+
+            if (!guildState._rizumu || !guildState._rizumu.isAlive()) {
+                await interaction.reply({ embeds: [getErrorEmbed('なにも再生していません。')] });
+                return;
+            }
+
+            const rizumu = guildState._rizumu;
+
+            rizumu.setLoopSingle(!rizumu.getLoopSingle());
+
+            em = new MessageEmbed()
+                .setTitle(rizumu.getLoopSingle() ? '🔂 ループが有効になりました。' : '➡ ループが無効になりました。')
+                .setColor('AQUA');
+
+            await interaction.reply({ embeds: [em] });
         }
     }
 });

@@ -83,8 +83,12 @@ class Rizumu {
 
         this._onApi('st-video-end', () => {
             this._log(`st-video-end`);
-            this._playingItem = null;
-            this._updatePlayingItem();
+            if (this._loopSingle && this._playingItem) {
+                this._playItemAsync(this._playingItem);
+            } else {
+                this._playingItem = null;
+                this._updatePlayingItem();
+            }
         });
 
         this._onApi('st-url-changed', data => {
@@ -105,6 +109,7 @@ class Rizumu {
         this._onFetchItem = [];
         this._playingItem = null;
         this._onUrlChanged = [];
+        this._loopSingle = false;
     }
 
     getAudioPlayer() {
@@ -148,14 +153,20 @@ class Rizumu {
         return this._player;
     }
 
-    getPlayingItem()
-    {
+    getPlayingItem() {
         return this._playingItem;
     }
 
-    getQueue()
-    {
+    getQueue() {
         return this._queue;
+    }
+
+    getLoopSingle() {
+        return this._loopSingle;
+    }
+
+    setLoopSingle(loopSingle) {
+        this._loopSingle = loopSingle;
     }
 
     _renewAudioResource() {
@@ -325,7 +336,7 @@ class Rizumu {
         */
 
         const listId = url.searchParams.get('list');
-        if(!listId) return;
+        if (!listId) return;
 
         progress?.({ message: '再生リストをフェッチ中...' });
         let count = 0;
