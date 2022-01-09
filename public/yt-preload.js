@@ -56,6 +56,7 @@ let adSkipObserver;
 let popupObserver;
 let videoObserver;
 let autoplayObserver;
+let errorObserver;
 function refreshWatch(instanceId) {
 
     console.log('Refreshing...');
@@ -66,6 +67,27 @@ function refreshWatch(instanceId) {
     }
 
     const video = document.querySelector('.html5-main-video');
+
+    waitForElement(document.querySelector('ytm-app'), '.player-placeholder', true, (coverContainer) => {
+        console.log("error observation!");
+        if(checkForError(coverContainer))
+        {
+            ipcRenderer.send(`st-video-end-${instanceId}`, null);
+        }
+
+        if(errorObserver) errorObserver.disconnect();
+        errorObserver = new MutationObserver(records => {
+            if(checkForError(coverContainer))
+            {
+                ipcRenderer.send(`st-video-end-${instanceId}`, null);
+            }
+        });
+
+        errorObserver.observe(coverContainer, {
+            subtree: true,
+            childList: true
+        });
+    });
 
     if (video) {
 
@@ -168,6 +190,16 @@ function refreshWatch(instanceId) {
         });
         console.log('Confirmation hooked.');
     }
+}
+
+function checkForError(container)
+{
+    const errorMessage = container.querySelector('ytm-player-error-message-renderer');
+    if(errorMessage) {
+        console.log("error message appeared!");
+        return true;
+    }
+    return false;
 }
 
 function hookVideo(video) {
