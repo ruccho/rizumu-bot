@@ -61,6 +61,8 @@ function refreshWatch(instanceId) {
 
     console.log('Refreshing...');
 
+    //console.log(document.querySelector('#player-container-id').innerHTML);
+
     const playContainer = document.querySelector('.ytp-cued-thumbnail-overlay');
     if (playContainer) {
         playContainer.querySelector('button')?.click();
@@ -69,7 +71,7 @@ function refreshWatch(instanceId) {
     const video = document.querySelector('.html5-main-video');
 
     waitForElement(document.querySelector('ytm-app'), '.player-placeholder', true, (coverContainer) => {
-        console.log("error observation!");
+        console.log("YouTube error observation");
         if(checkForError(coverContainer))
         {
             ipcRenderer.send(`st-video-end-${instanceId}`, null);
@@ -118,28 +120,12 @@ function refreshWatch(instanceId) {
             if (isNaN(video.duration)) {
                 console.log('Post-video ads skipped');
                 onEnded();
+            }else{
+                video.play();
             }
             //ipcRenderer.send(`st-video-end-${instanceId}`, null);
         });
     }
-
-    //for desktop
-    /*
-    const adModule = document.querySelector('.video-ads.ytp-ad-module');
-    if (adModule) {
-        skipAds(adModule, video);
-
-        if (adSkipObserver) adSkipObserver.disconnect();
-        adSkipObserver = new MutationObserver(records => {
-            skipAds(adModule, video);
-        })
-
-        adSkipObserver.observe(adModule, {
-            childList: true
-        });
-        console.log('Ad skipping hooked.');
-    }
-    */
 
     //for mobile 
     waitForElement(document.querySelector('.html5-video-player'), '.video-ads.ytp-ad-module', false, (adModule) => {
@@ -158,10 +144,9 @@ function refreshWatch(instanceId) {
     });
 
     //自動再生をオフ
-    const autonavButton = document.querySelector('.ytm-autonav-toggle-button-container');
-    if (autonavButton) {
+    waitForElement(document.querySelector('#player-control-container'), '.ytm-autonav-toggle-button-container', true, (autonavButton) => {
         disableAutoplay();
-    } else console.log('Autonav button not found.')
+    });
 
     const popup = document.querySelector('ytd-popup-container');
     if (popup) {
