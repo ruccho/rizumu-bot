@@ -1,17 +1,16 @@
-const { app, BrowserWindow, dialog } = require('electron')
-const { Client, Intents, MessageEmbed, MessageAttachment } = require('discord.js');
-const path = require('path');
-const {
+import { app, BrowserWindow, dialog } from 'electron';
+import { Client, Intents, MessageEmbed, MessageAttachment, CommandInteraction, GuildMember } from 'discord.js';
+import {
     VoiceConnectionStatus,
     joinVoiceChannel,
     getVoiceConnection,
     entersState
-} = require('@discordjs/voice');
+} from '@discordjs/voice';
 
 const config = require('../state/config.json');
-const Rizumu = require('./Rizumu');
+import Rizumu from './Rizumu';
 const state = require('../state/state.json');
-const commandRegisterer = require('./SlashCommandRegisterer')
+import commandRegisterer from './SlashCommandRegisterer';
 
 const { discord_token, rizumu_command_prefix } = config;
 const silentMode = config.rizumu_silent;
@@ -61,7 +60,6 @@ client.on('interactionCreate', async interaction => {
 
             if (guildState._rizumu) {
                 guildState._rizumu.close();
-                guildState._player = null;
             }
 
             let em = new MessageEmbed()
@@ -90,7 +88,7 @@ client.on('interactionCreate', async interaction => {
             let voiceChannel;
             if (!silentMode) {
                 //join voiceChannel
-                voiceChannel = interaction.member.voice.channel;
+                voiceChannel = (interaction.member as GuildMember).voice.channel;
                 if (!voiceChannel) {
                     await followUpError(interaction, 'ボイスチャンネルに参加してから使用してください。');
                     return;
@@ -218,7 +216,7 @@ client.on('interactionCreate', async interaction => {
 
             const pngBytes = await guildState._rizumu.captureAsync();
 
-            const filename = `temp/capture_${guildState._rizumu._instanceId}.png`;
+            const filename = `temp/capture_${guildState._rizumu.instanceId}.png`;
             const file = new MessageAttachment(pngBytes, filename);
 
             await interaction.followUp({ files: [file] });
@@ -247,7 +245,7 @@ client.on('interactionCreate', async interaction => {
                 .setAuthor('🎧 Now Playing')
                 .setTitle(playingItem.title)
                 .setFooter(playingItem.channel)
-                .setURL(playingItem.getUrl())
+                .setURL(playingItem.url)
                 .setColor('GREY');
             await interaction.reply({ embeds: [em] });
         } else if (subcommand === 'queue') {
@@ -265,8 +263,7 @@ client.on('interactionCreate', async interaction => {
             }
 
             const queue = guildState._rizumu.getQueue();
-            if(queue.length == 0)
-            {
+            if (queue.length == 0) {
                 await interaction.reply({ embeds: [getErrorEmbed('キューは空です。')] });
                 return;
             }
@@ -282,7 +279,7 @@ client.on('interactionCreate', async interaction => {
             }
 
             await interaction.reply({ embeds: [em] });
-        }else if (subcommand === 'clear') {
+        } else if (subcommand === 'clear') {
 
             const guild = interaction.guild;
             const guildId = guild.id;
@@ -298,13 +295,13 @@ client.on('interactionCreate', async interaction => {
 
             const queue = guildState._rizumu.getQueue();
             queue.splice(0);
-            
+
             em = new MessageEmbed()
                 .setTitle('キューを空にしました。')
                 .setColor('AQUA');
 
             await interaction.reply({ embeds: [em] });
-        } else if(subcommand === 'shuffle'){
+        } else if (subcommand === 'shuffle') {
 
             const guild = interaction.guild;
             const guildId = guild.id;
@@ -323,14 +320,14 @@ client.on('interactionCreate', async interaction => {
             for (let i = queue.length - 1; i >= 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [queue[i], queue[j]] = [queue[j], queue[i]];
-              }
-            
+            }
+
             em = new MessageEmbed()
                 .setTitle('キューをシャッフルしました。')
                 .setColor('AQUA');
 
             await interaction.reply({ embeds: [em] });
-        }else if(subcommand === 'loop'){
+        } else if (subcommand === 'loop') {
 
             const guild = interaction.guild;
             const guildId = guild.id;
@@ -386,7 +383,6 @@ client.on('voiceStateUpdate', (oldState, newState) => {
                 if (guildState._rizumu) {
                     guildState._rizumu.close();
                     guildState._rizumu = null;
-                    guildState._player = null;
                 }
 
             }
@@ -403,12 +399,23 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     }
 })();
 
-function getGuildState(guildId) {
+function getGuildState(guildId: string) {
     let entry = state.guilds[guildId];
-    return entry;
+    return assertGuildState(entry) ? entry : undefined;
 }
 
-async function validateGuildState(interaction) {
+type GuildState = {
+    id: string;
+    commandVersion: number;
+    _rizumu?: Rizumu;
+};
+
+function assertGuildState(state: any): state is GuildState {
+    return typeof state.id === "string" ||
+        typeof state.commandVersion === "number";
+}
+
+async function validateGuildState(interaction: CommandInteraction) {
     const guild = interaction.guild;
     const guildId = guild.id;
     const guildState = getGuildState(guildId);
@@ -425,13 +432,13 @@ async function validateGuildState(interaction) {
     return guildState;
 }
 
-function getErrorEmbed(message) {
+function getErrorEmbed(message: string) {
     return new MessageEmbed()
         .setTitle('❌ エラー')
         .setDescription(message)
         .setColor('RED');
 }
 
-async function followUpError(interaction, message) {
+async function followUpError(interaction: CommandInteraction, message: string) {
     await interaction.followUp({ embeds: [getErrorEmbed(message)] });
 }

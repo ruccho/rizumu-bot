@@ -72,15 +72,13 @@ function refreshWatch(instanceId) {
 
     waitForElement(document.querySelector('ytm-app'), '.player-placeholder', true, (coverContainer) => {
         console.log("YouTube error observation");
-        if(checkForError(coverContainer))
-        {
+        if (checkForError(coverContainer)) {
             ipcRenderer.send(`st-video-end-${instanceId}`, null);
         }
 
-        if(errorObserver) errorObserver.disconnect();
+        if (errorObserver) errorObserver.disconnect();
         errorObserver = new MutationObserver(records => {
-            if(checkForError(coverContainer))
-            {
+            if (checkForError(coverContainer)) {
                 ipcRenderer.send(`st-video-end-${instanceId}`, null);
             }
         });
@@ -120,7 +118,7 @@ function refreshWatch(instanceId) {
             if (isNaN(video.duration)) {
                 console.log('Post-video ads skipped');
                 onEnded();
-            }else{
+            } else {
                 video.play();
             }
             //ipcRenderer.send(`st-video-end-${instanceId}`, null);
@@ -177,10 +175,9 @@ function refreshWatch(instanceId) {
     }
 }
 
-function checkForError(container)
-{
+function checkForError(container) {
     const errorMessage = container.querySelector('ytm-player-error-message-renderer');
-    if(errorMessage) {
+    if (errorMessage) {
         console.log("error message appeared!");
         return true;
     }
@@ -277,7 +274,7 @@ function fetchPlaylistKernel(container, position, callback) {
         fetchPlaylistTimeoutId = setTimeout(() => fetchPlaylistKernel(container, position, callback), 500);
         return;
     }
-    
+
     if (fetchPlaylistInitialTimeoutId) {
         clearTimeout(fetchPlaylistInitialTimeoutId);
         fetchPlaylistInitialTimeoutId = void 0;
@@ -305,6 +302,7 @@ function fetchPlaylistKernel(container, position, callback) {
         try {
 
             const link = child.querySelector('a.compact-media-item-metadata-content')//'a#video-title');
+            const labelLength = child.querySelector('ytm-thumbnail-overlay-time-status-renderer > span.icon-text');
 
             if (!link) continue;
 
@@ -314,12 +312,24 @@ function fetchPlaylistKernel(container, position, callback) {
             const watchId = url.searchParams.get('v');
             const channel = link.querySelector('.compact-media-item-byline').innerText;
 
+            let lengthSeconds = void 0;
+
+            if (labelLength) {
+                const lengthStr = labelLength.innerText;
+                const segs = lengthStr.split(':').reverse();
+                lengthSeconds = 0;
+                if (segs.length > 0) lengthSeconds += parseInt(segs[0]);
+                if (segs.length > 1) lengthSeconds += parseInt(segs[1]) * 60;
+                if (segs.length > 2) lengthSeconds += parseInt(segs[2]) * 3600;
+            }
+
             callback(false,
                 {
                     type: 'YT_WATCH',
                     title: title,
                     watchId: watchId,
-                    channel: channel
+                    channel: channel,
+                    lengthSeconds: lengthSeconds
                 });
         } catch (error) {
             console.error(error);

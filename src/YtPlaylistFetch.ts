@@ -1,19 +1,19 @@
-const { BrowserWindow, ipcMain } = require("electron");
-const YtWatchItem = require("./YtWatchItem");
-const uuid = require('uuid');
-const path = require('path');
+import { BrowserWindow, ipcMain } from "electron";
+import YtWatchItem from "./YtWatchItem";
+import * as uuid from 'uuid';
+import * as path from 'path';
 
-function log(instanceId, message) {
+function log(instanceId: string, message: string) {
     console.log(`[${instanceId}] [PLAYLIST] ${message}`);
 }
 
-function sendApi(window, instanceId, eventName, data) {
+function sendApi(window: BrowserWindow, instanceId: string, eventName: string, data: any) {
     const channel = `${eventName}-${instanceId}`;
     log(instanceId, `sending on ${channel}`);
     window.webContents.send(channel, data);
 }
 
-function onApi(instanceId, eventName, listener) {
+function onApi<T>(instanceId: string, eventName: string, listener: (data: T) => void) {
     const channel = `${eventName}-${instanceId}`;
     log(instanceId, `listening on ${channel}`);
     ipcMain.on(channel, (event, arg) => {
@@ -21,7 +21,7 @@ function onApi(instanceId, eventName, listener) {
     });
 }
 
-async function fetchYtPlaylist(listId, headless, onItem) {
+export default async function fetchYtPlaylist(listId: string, headless: boolean, onItem: (item: YtWatchItem) => void) {
 
     const instanceId = uuid.v4();
 
@@ -30,21 +30,21 @@ async function fetchYtPlaylist(listId, headless, onItem) {
         height: 400,
         show: !headless,
         webPreferences: {
-            preload: path.join(__dirname, 'renderer', 'rizumu-preload.js'),
+            preload: path.join(__dirname, '../src/renderer', 'rizumu-preload.js'),
             webviewTag: true,
             offscreen: headless,
         }
     });
 
-    const url = 'file://' + path.join(__dirname + `/public/rizumu.html?instance_id=${instanceId}`);
+    const url = 'file://' + path.join(__dirname, `../src/public/rizumu.html`) + `?instance_id=${instanceId}`;
     win.loadURL(url);
 
     ipcMain.on(`st-console-message-${instanceId}`, (e, arg) => {
         log(instanceId, arg.message);
     });
 
-    const readyPromise = new Promise((res, rej) => {
-        onApi(instanceId, 'st-ready', arg => {
+    const readyPromise = new Promise<void>((res, rej) => {
+        onApi(instanceId, 'st-ready', () => {
             res();
         });
     });
@@ -53,8 +53,8 @@ async function fetchYtPlaylist(listId, headless, onItem) {
 
     log(instanceId, 'ready');
 
-    const completePromise = new Promise((res, rej) => {
-        onApi(instanceId, 'st-playlist-item', item => {
+    const completePromise = new Promise<void>((res, rej) => {
+        onApi<{ type: string }>(instanceId, 'st-playlist-item', item => {
             if (item) {
                 //log(instanceId, `Playlist item: ${item.title}`);
                 let parsedItem;
@@ -75,5 +75,3 @@ async function fetchYtPlaylist(listId, headless, onItem) {
     sendApi(win, instanceId, 'op-fetch-list', listId);
     return completePromise;
 }
-
-module.exports = fetchYtPlaylist;

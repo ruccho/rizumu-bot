@@ -1,12 +1,14 @@
-const YtWatchItem = require('./YtWatchItem');
+import YtWatchItem from './YtWatchItem';
+import fetch from 'node-fetch';
 
+/*
 let fetch;
 const fetchPromise = (async () => {
     fetch = (await import('node-fetch')).default;
 })();
+*/
 
-async function fetchYtWatchItem(watchId) {
-    await fetchPromise;
+export default async function fetchYtWatchItem(watchId: string) {
     console.log(`fetchYtWatchItem(): fetching ${watchId}...`);
 
     const watchUrl = `https://www.youtube.com/watch?v=${watchId}`;

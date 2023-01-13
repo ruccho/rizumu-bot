@@ -120,3 +120,5 @@ dist
 # Custom files
 config.json
 state.json
+
+/build/

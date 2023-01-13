@@ -1,6 +1,6 @@
-const { SlashCommandBuilder } = require('@discordjs/builders');
-const { REST } = require('@discordjs/rest');
-const { Routes } = require('discord-api-types/v9');
+import { SlashCommandBuilder } from '@discordjs/builders';
+import { REST } from '@discordjs/rest';
+import { Routes } from 'discord-api-types/v9';
 const { discord_token, discord_client_id, rizumu_command_prefix } = require('../state/config.json');
 
 const commands = [
@@ -65,4 +65,4 @@ class SlashCommandRegisterer {
     }
 }
 
-module.exports = new SlashCommandRegisterer();
+export default new SlashCommandRegisterer();

@@ -1,14 +1,42 @@
-const { AudioPlayerStatus, createAudioPlayer, NoSubscriberBehavior, createAudioResource, StreamType } = require('@discordjs/voice');
-const { BrowserWindow, ipcMain } = require('electron')
-const path = require('path');
-const { Readable } = require('stream');
-const uuid = require('uuid');
-const fetchYtPlaylist = require('./YtPlaylistFetch');
-const fetchYtWatchItem = require('./YtWatchFetch');
-const YtWatchItem = require('./YtWatchItem');
+import { AudioPlayerStatus, createAudioPlayer, NoSubscriberBehavior, createAudioResource, StreamType, AudioPlayer } from '@discordjs/voice';
+import { BrowserWindow, ipcMain } from 'electron';
+import path = require('path');
+import { Readable } from 'stream';
+import * as uuid from 'uuid';
+import RizumuItem from './RizumuItem';
+import fetchYtPlaylist from './YtPlaylistFetch';
+import fetchYtWatchItem from './YtWatchFetch';
+import YtWatchItem from './YtWatchItem';
+
+
+
+type ProgressCallback = (data: { message: string }) => void;
 
 class Rizumu {
-    constructor(headless) {
+
+    private _instanceId: string;
+
+    public get instanceId() {
+        return this._instanceId;
+    }
+
+
+    private _headless: boolean;
+
+    private _isAlive: boolean = true;
+    private _isReady: boolean = false;
+    private _onReady: Function[] = [];
+    private _queue: RizumuItem[] = [];
+    private _isBusy: boolean = false;
+    private _playingItem: RizumuItem = null;
+    private _onUrlChanged: Array<(url: string) => void> = [];
+    private _loopSingle: boolean = false;
+    private _audioStream: Readable;
+    private _window: BrowserWindow;
+
+    private _player: AudioPlayer;
+
+    constructor(headless: boolean) {
         const instanceId = uuid.v4();
 
         this._instanceId = instanceId;
@@ -19,15 +47,16 @@ class Rizumu {
             height: 400,
             show: !this._headless,
             webPreferences: {
-                preload: path.join(__dirname, 'renderer', 'rizumu-preload.js'),
+                preload: path.join(__dirname, '../src/renderer', 'rizumu-preload.js'),
                 webviewTag: true,
+
                 offscreen: this._headless,
             }
         })
 
         win.webContents.setFrameRate(10)
 
-        const url = 'file://' + path.join(__dirname + `/public/rizumu.html?instance_id=${instanceId}`);
+        const url = 'file://' + path.join(__dirname, `../src/public/rizumu.html`) + `?instance_id=${instanceId}`;
         win.loadURL(url);
 
         ipcMain.on(`st-console-message-${instanceId}`, (e, arg) => {
@@ -46,7 +75,7 @@ class Rizumu {
             this._audioStream?.push(samplesBuffer);
         });
 
-        this._onApi('st-ready', arg => {
+        this._onApi('st-ready', () => {
             this._log("ready")
             this._isReady = true;
             for (let res of this._onReady) {
@@ -54,32 +83,6 @@ class Rizumu {
             }
             this._onReady.splice(0);
         });
-
-        /*
-        this._onApi('st-playlist-item', item => {
-            if (item) {
-                this._log(`Playlist item: ${item.title}`);
-                let parsedItem;
-                if (item.type === 'YT_WATCH') {
-                    parsedItem = YtWatchItem.fromItemObject(item);
-                }
-                if(parsedItem)
-                {
-                    this.enqueueItem(parsedItem, true);
-                }
-                for (let res of this._onFetchItem) {
-                    res(item);
-                }
-            } else {
-                //completed
-                this._log('The list fully fetched');
-                for (let res of this._onFetchCompleted) {
-                    res();
-                }
-                this._onFetchCompleted.splice(0);
-            }
-        });
-        */
 
         this._onApi('st-video-end', () => {
             this._log(`st-video-end`);
@@ -91,7 +94,7 @@ class Rizumu {
             }
         });
 
-        this._onApi('st-url-changed', data => {
+        this._onApi<{ url: string }>('st-url-changed', data => {
             this._log(`st-url-changed ${data.url}`);
             for (let res of this._onUrlChanged) {
                 res(data.url);
@@ -100,16 +103,6 @@ class Rizumu {
         });
 
         this._window = win;
-        this._isAlive = true;
-        this._isReady = false;
-        this._onReady = [];
-        this._queue = [];
-        this._isBusy = false;
-        this._onFetchCompleted = [];
-        this._onFetchItem = [];
-        this._playingItem = null;
-        this._onUrlChanged = [];
-        this._loopSingle = false;
     }
 
     getAudioPlayer() {
@@ -165,11 +158,11 @@ class Rizumu {
         return this._loopSingle;
     }
 
-    setLoopSingle(loopSingle) {
+    setLoopSingle(loopSingle: boolean) {
         this._loopSingle = loopSingle;
     }
 
-    _renewAudioResource() {
+    private _renewAudioResource() {
         const rawStream = this.getAudioStream();
 
         const resource = createAudioResource(rawStream, {
@@ -181,7 +174,7 @@ class Rizumu {
         this._player.play(resource);
     }
 
-    enqueueItem(item, autoplay) {
+    enqueueItem(item: RizumuItem, autoplay: boolean) {
         this._queue.push(item);
         if (autoplay)
             this._updatePlayingItem();
@@ -208,7 +201,7 @@ class Rizumu {
     readyAsync() {
         if (this._isReady) {
             return new Promise((res, rej) => {
-                res();
+                res(undefined);
             });
         } else {
             return new Promise((res, rej) => {
@@ -218,14 +211,14 @@ class Rizumu {
     }
 
     captureAsync() {
-        return new Promise((res, rej) => {
+        return new Promise<Buffer>((res, rej) => {
             this._window.webContents.once('paint', (event, dirty, image) => {
                 res(image.toPNG());
             });
         });
     }
 
-    async playUrlAsync(url, progress) {
+    async playUrlAsync(url: URL, progress?: ProgressCallback) {
         if (this._isBusy) {
             throw new Error('別の処理が実行中です。');
         }
@@ -251,12 +244,12 @@ class Rizumu {
         }
     }
 
-    async _updatePlayingItem() {
+    private async _updatePlayingItem() {
         if (this._playingItem) return;
         await this.moveQueueAsync(0);
     }
 
-    async moveQueueAsync(position) {
+    async moveQueueAsync(position: number) {
         if (position >= 0) this._queue.splice(0, position);
         if (this._queue.length > 0) {
             await this._playItemAsync(this._queue[0]);
@@ -264,7 +257,7 @@ class Rizumu {
         }
     }
 
-    async _playItemAsync(item) {
+    private async _playItemAsync(item: RizumuItem) {
         if (item instanceof YtWatchItem) {
             let urlStr = `https://www.youtube.com/watch?v=${item.watchId}`;
             this._log(`playing ${urlStr}`);
@@ -278,9 +271,9 @@ class Rizumu {
         }
     }
 
-    _waitForUrlAsync() {
+    private _waitForUrlAsync() {
         this._log(`_waitForUrlAsync(): waiting for next url`);
-        return new Promise((res, rej) => {
+        return new Promise<string>((res, rej) => {
             this._onUrlChanged.push((url) => {
                 this._log(`_waitForUrlAsync(): resolved: ${url}`);
                 res(url);
@@ -288,7 +281,7 @@ class Rizumu {
         })
     }
 
-    async _playWatchAsync(url, progress) {
+    private async _playWatchAsync(url: URL, progress?: ProgressCallback) {
         const watchId = url.searchParams.get('v');
 
         const item = await fetchYtWatchItem(watchId);
@@ -296,44 +289,7 @@ class Rizumu {
         this.enqueueItem(item, true);
     }
 
-    async _fetchListAsync(url, progress) {
-        /*
-        const playing = this._playingItem;
-        this._playingItem = null;
-        progress?.({ message: '再生リストをフェッチ中...' });
-
-        let count = 0;
-        const onItem = item => {
-            count++;
-            if (count % 100 == 0) {
-                progress?.({ message: `再生リストをフェッチ中: ${count} アイテム` });
-            }
-        }
-        this._onFetchItem.push(onItem);
-
-        const p = new Promise((res, rej) => {
-            this._onFetchCompleted.push(async () => {
-                try {
-                    progress?.({ message: `フェッチ完了: ${count} アイテム 動画を再生...` });
-                    if (playing) {
-                        await this._playItemAsync(playing);
-                    } else {
-                        await this._updatePlayingItem();
-                    }
-                } catch (error) {
-                    rej(error);
-                } finally {
-                    this._onFetchItem.splice(
-                        this._onFetchItem.findIndex(v => v == onItem),
-                        1
-                    );
-                }
-                res();
-            });
-        });
-        this._sendApi('op-fetch-list', url.href);
-        return p;
-        */
+    private async _fetchListAsync(url: URL, progress?: ProgressCallback) {
 
         const listId = url.searchParams.get('list');
         if (!listId) return;
@@ -350,13 +306,13 @@ class Rizumu {
         })
     }
 
-    _sendApi(eventName, data) {
+    private _sendApi(eventName: string, data: any) {
         const channel = `${eventName}-${this._instanceId}`;
         console.log(`[RIZUMU] sending on ${channel}`);
         this._window.webContents.send(channel, data);
     }
 
-    _onApi(eventName, listener) {
+    private _onApi<T>(eventName: string, listener: (arg: T) => void) {
         const channel = `${eventName}-${this._instanceId}`;
         console.log(`[RIZUMU] listening on ${channel}`);
         ipcMain.on(channel, (event, arg) => {
@@ -364,9 +320,9 @@ class Rizumu {
         });
     }
 
-    _log(message) {
+    private _log(message: any) {
         console.log(`[${this._instanceId}] [RIZUMU] ${message}`)
     }
 }
 
-module.exports = Rizumu;
+export default Rizumu;
