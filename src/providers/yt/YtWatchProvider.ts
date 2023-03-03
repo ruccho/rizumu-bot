@@ -105,14 +105,14 @@ export default class YtWatchProvider implements RizumuProvider {
         return url.pathname === '/watch' || url.pathname === '/playlist';
     }
 
-    async processAsync(url: URL, emitItem: (item: YtWatchItem) => void): Promise<void> {
+    async processAsync(url: URL, emitItem: (item: YtWatchItem) => void, progress?: ProgressCallback): Promise<void> {
         if (url.pathname === '/watch') {
             const watchId = url.searchParams.get('v');
             if (!watchId) return;
             const fetched = await fetchYtWatchItem(watchId);
             if(fetched) emitItem(fetched);
         } else if (url.pathname === '/playlist') {
-            await fetchListAsync(url, emitItem);
+            await fetchListAsync(url, emitItem, progress);
         }
     }
 

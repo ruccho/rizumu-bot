@@ -1,4 +1,4 @@
-import { addBypassProcessorModule } from "../../renderer/RizumuPreloadLib";
+import { addBypassProcessorModule } from "../../RizumuPreloadLib";
 import { ipcRenderer, contextBridge } from "electron";
 
 
@@ -133,14 +133,12 @@ function refreshWatch() {
 
         video.addEventListener('ended', onEnded);
 
-        console.log("pause hook");
         video.addEventListener('pause', e => {
             console.log('Video paused.');
             console.log(`video duration: ${video.duration}, current: ${video.currentTime}, src: ${video.currentSrc}`);
 
             //when post-video ads skipped
-            if (isNaN(video.duration)) {
-                console.log('Post-video ads skipped');
+            if (isNaN(video.duration) || video.duration == video.currentTime) {
                 onEnded();
             } else {
                 video.play();
@@ -396,15 +394,11 @@ function fetchPlaylistKernel(container: Element, position: number, callback: (
 async function initializeBypass() {
     console.log("initializing bypass...");
 
-    //console.log(require.resolve('electron'));
-
-    //await audioContext.audioWorklet.addModule(processorUrl);
     await addBypassProcessorModule(audioContext);
     console.log("Bypass created");
     bypass = new BypassNode(audioContext);
 
     console.log("Send to: " + `audio-data-${instanceId}`)
-
 
     bypass.port.onmessage = e => {
         ipcRenderer.send(`audio-data-${instanceId}`, e.data);

@@ -1,8 +1,8 @@
 import { AudioPlayerStatus, createAudioPlayer, NoSubscriberBehavior, createAudioResource, StreamType, AudioPlayer } from '@discordjs/voice';
 import { BrowserWindow, ipcMain, webContents } from 'electron';
-import path = require('path');
 import { Readable } from 'stream';
 import * as uuid from 'uuid';
+import { BrowserContainer } from './BrowserContainer';
 import ProviderManager from './providers/ProviderManager';
 import { RizumuProvider } from './providers/RizumuProvider';
 import RizumuItem from './RizumuItem';
@@ -10,79 +10,10 @@ import RizumuItem from './RizumuItem';
 
 export type ProgressCallback = (data: { message: string }) => void;
 
-type RizumuOptions = {
+export type RizumuOptions = {
     headless: boolean;
     providers: RizumuProvider[];
 };
-
-class BrowserContainer {
-    private currentWindow?: BrowserWindow;
-    private currentPreloadPath?: string;
-    private headless: boolean;
-    private instanceId: string;
-
-    constructor(headless: boolean, instanceId: string) {
-        this.headless = headless;
-        this.instanceId = instanceId;
-    }
-
-    open(url: string, preloadPath: string) {
-        if (!this.currentWindow || preloadPath != this.currentPreloadPath) {
-
-            this.close();
-
-            const win = this.currentWindow = new BrowserWindow({
-                width: 450,
-                height: 400,
-                show: !this.headless,
-                webPreferences: {
-                    preload: preloadPath,
-                    //webviewTag: true,
-                    offscreen: this.headless,
-                    sandbox: false
-                }
-            });
-
-            win.webContents.setFrameRate(10);
-
-            win.webContents.addListener("console-message", (e, level, message) => {
-                if (level === void 0 || level === 0)
-                    console.log(`[${this.instanceId}] ${message}`)
-                else if (level === 1)
-                    console.info(`[${this.instanceId}] ${message}`)
-                else if (level === 2)
-                    console.warn(`[${this.instanceId}] ${message}`)
-                else if (level === 3)
-                    console.error(`[${this.instanceId}] ${message}`)
-            });
-
-            this.currentWindow = win;
-            this.currentPreloadPath = preloadPath;
-
-        }
-
-        const u = new URL(url);
-        u.searchParams.set("rizumu_instance_id", this.instanceId);
-
-        this.currentWindow.loadURL(u.toString());
-
-    }
-
-    close() {
-        this.currentWindow?.close();
-        this.currentWindow = undefined;
-
-        this.currentPreloadPath = undefined;
-    }
-
-    get isAlive() {
-        return this.currentWindow && !this.currentWindow.isDestroyed();
-    }
-
-    get currentWebContents() {
-        return this.currentWindow?.webContents;
-    }
-}
 
 class Rizumu {
 
@@ -138,7 +69,7 @@ class Rizumu {
         const url = 'file://' + path.join(__dirname, `../src/public/rizumu.html`) + `?instance_id=${instanceId}`;
         win.loadURL(url);
         */
-        this.browser = new BrowserContainer(this._headless, this.instanceId);
+        this.browser = new BrowserContainer(this._headless, this.instanceId, "BROWSER");
 
         ipcMain.on(`st-console-message-${instanceId}`, (e, arg) => {
 
@@ -317,23 +248,6 @@ class Rizumu {
             await this.providers.processAsync(url, (item) => {
                 this.enqueueItem(item, true);
             }, progress);
-
-            /*
-            if (!url.hostname.endsWith('youtube.com')) {
-                throw new Error('対応していないURLです。');
-            }
-
-            if (url.pathname === '/watch') {
-                //watch url
-                progress?.({ message: '動画を再生...' });
-                await this._playWatchAsync(url, progress);
-            } else if (url.pathname === '/playlist') {
-                //playlist url
-                await this._fetchListAsync(url, progress);
-            } else {
-                throw new Error('対応していないURLです。');
-            }
-            */
         } finally {
             this._isBusy = false;
         }
@@ -346,7 +260,12 @@ class Rizumu {
 
     async moveQueueAsync(position: number) {
         if (position >= 0) this._queue.splice(0, position);
-        if (this._queue.length > 0) {
+        if (this._queue.length == 0) {
+            //empty
+            this._log("the queue has been emptied.");
+            this.browser.close();
+        } else {
+
             await this._playItemAsync(this._queue[0]);
             this._queue.splice(0, 1);
         }

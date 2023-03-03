@@ -1,3 +1,4 @@
+import { PublicError } from "../PublicError";
 import Rizumu, { ProgressCallback } from "../Rizumu";
 import RizumuItem from "../RizumuItem";
 import { RizumuProvider } from "./RizumuProvider";
@@ -22,12 +23,12 @@ export default class ProviderManager {
         {
             if(provider.match(url))
             {
-                await provider.processAsync(url, emitItem);
+                await provider.processAsync(url, emitItem, progress);
                 return;
             }
         }
 
-        console.warn(`No suitable provider is installed for URL "${url}".`);
+        throw new PublicError(`このURLには対応していません。`);
     }
 
     async playItemAsync(rizumu: Rizumu, item: RizumuItem)

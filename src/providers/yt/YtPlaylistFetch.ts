@@ -2,6 +2,8 @@ import { BrowserWindow, ipcMain } from "electron";
 import * as uuid from 'uuid';
 import * as path from 'path';
 import { YtWatchItem } from "./YtWatchProvider";
+import { BrowserContainer } from "../../BrowserContainer";
+import { PublicError } from "../../PublicError";
 
 function log(instanceId: string, message: string) {
     console.log(`[${instanceId}] [PLAYLIST] ${message}`);
@@ -25,37 +27,52 @@ export default async function fetchYtPlaylist(listId: string, headless: boolean,
 
     const instanceId = uuid.v4();
 
-    const win = new BrowserWindow({
-        width: 450,
-        height: 400,
-        show: !headless,
-        webPreferences: {
-            preload: path.join(__dirname, 'YtPreload.js'),
-            //webviewTag: true,
-            offscreen: headless,
-            sandbox: false
-        }
-    });
-
+    const browser = new BrowserContainer(headless, instanceId, "PLAYLIST-BROWSER");
     log(instanceId, 'ready');
 
     const url = new URL(`https://m.youtube.com/playlist?app=m&list=${listId}`);
     url.searchParams.set("rizumu_instance_id", instanceId);
-    win.loadURL(url.toString());
+    browser.open(url.toString(), path.join(__dirname, 'YtPreload.js'));
 
-    const completePromise = new Promise<void>((res, rej) => {
-        onApi<{ type: string }>(instanceId, 'st-playlist-item', item => {
-            if (item) {
-                const fined = YtWatchItem.assertAndInstantiate(item);
-                if (fined) onItem(fined);
-                else console.warn(`Unsupported item: ${item.type}`);
-            } else {
-                log(instanceId, 'The list fully fetched');
-                win.destroy();
-                res();
-            }
+    const fetchTimeoutMs = 30_000;
+
+    const state: {
+        timeoutId?: NodeJS.Timeout
+    } = {
+        timeoutId: undefined
+    };
+    try {
+
+        const completePromise = new Promise<void>((res, rej) => {
+            const fetchTimeout = () => {
+                log(instanceId, "Playlist fetching timed out.");
+                rej(new PublicError("プレイリストの取得がタイムアウトしました。"));
+            };
+
+            state.timeoutId = setTimeout(fetchTimeout, fetchTimeoutMs);
+
+            onApi<{ type: string }>(instanceId, 'st-playlist-item', item => {
+
+                clearTimeout(state.timeoutId);
+                state.timeoutId = undefined;
+
+                if (item) {
+                    
+                    state.timeoutId = setTimeout(fetchTimeout, fetchTimeoutMs);
+
+                    const fined = YtWatchItem.assertAndInstantiate(item);
+                    if (fined) onItem(fined);
+                    else log(instanceId, `Unsupported item: ${item.type}`);
+                } else {
+                    log(instanceId, 'The list fully fetched');
+                    res();
+                }
+            });
         });
-    });
-    
-    return completePromise;
+
+        return completePromise;
+    } finally {
+        clearTimeout(state.timeoutId);
+        browser.close();
+    }
 }
