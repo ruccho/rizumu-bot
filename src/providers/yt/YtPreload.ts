@@ -1,13 +1,16 @@
+import { addBypassProcessorModule } from "../../renderer/RizumuPreloadLib";
+import { ipcRenderer, contextBridge } from "electron";
+
 
 console.log('yt-preload');
-
-const { ipcRenderer } = require('electron')
 
 const audioContext = new AudioContext({
     sampleRate: 48000
 });
 
-let bypass;
+let bypass: BypassNode | undefined = undefined;
+
+/*
 
 ipcRenderer.on('initialize', async (e, data) => {
     console.log(data.instanceId);
@@ -16,16 +19,37 @@ ipcRenderer.on('initialize', async (e, data) => {
 });
 
 ipcRenderer.on(`refresh`, async function (e, data) {
-
     if (location.pathname === "/watch") {
-        if (!bypass) await initializeBypass(data.instanceId, data.processorUrl);
+        if (!bypass) await initializeBypass(data.instanceId);
         refreshWatch(data.instanceId);
     } else if (location.pathname === "/playlist") {
         refreshPlaylist(data.instanceId);
     }
 });
+*/
 
-function waitForElement(container, selector, subtree, callback) {
+declare var window: Window & {
+    rizumu: {
+        instanceId: string;
+    }
+}
+
+const instanceId = (new URL(location.href)).searchParams.get("rizumu_instance_id");
+
+console.log(document);
+console.log(instanceId);
+
+window.addEventListener("load", async (e) => {
+    console.log("onload");
+    if (location.pathname === "/watch") {
+        if (!bypass) await initializeBypass();
+        refreshWatch();
+    } else if (location.pathname === "/playlist") {
+        refreshPlaylist();
+    }
+});
+
+function waitForElement(container: Element, selector: string, subtree: boolean, callback: (coverContainer: Element) => void) {
 
     {
         const target = container.querySelector(selector);
@@ -35,8 +59,7 @@ function waitForElement(container, selector, subtree, callback) {
         }
     }
 
-    let observer;
-    observer = new MutationObserver(records => {
+    const observer: MutationObserver = new MutationObserver(records => {
         const target = container.querySelector(selector);
         if (target) {
             observer.disconnect();
@@ -50,12 +73,13 @@ function waitForElement(container, selector, subtree, callback) {
     });
 }
 
-let adSkipObserver;
-let popupObserver;
-let videoObserver;
-let autoplayObserver;
-let errorObserver;
-function refreshWatch(instanceId) {
+let adSkipObserver: MutationObserver | undefined = undefined;
+let popupObserver: MutationObserver | undefined = undefined;
+let videoObserver: MutationObserver | undefined = undefined;
+let autoplayObserver: MutationObserver | undefined = undefined;
+let errorObserver: MutationObserver | undefined = undefined;
+
+function refreshWatch() {
 
     console.log('Refreshing...');
 
@@ -66,9 +90,9 @@ function refreshWatch(instanceId) {
         playContainer.querySelector('button')?.click();
     }
 
-    const video = document.querySelector('.html5-main-video');
+    const video = document.querySelector<HTMLVideoElement>('.html5-main-video');
 
-    waitForElement(document.querySelector('ytm-app'), '.player-placeholder', true, (coverContainer) => {
+    waitForElement(document.querySelector('ytm-app')!, '.player-placeholder', true, (coverContainer) => {
         console.log("YouTube error observation");
         if (checkForError(coverContainer)) {
             ipcRenderer.send(`st-video-end-${instanceId}`, null);
@@ -93,6 +117,7 @@ function refreshWatch(instanceId) {
 
         if (videoObserver) videoObserver.disconnect();
         videoObserver = new MutationObserver(records => {
+            console.log("video src mutation: " + video.src);
             hookVideo(video);
         })
 
@@ -108,6 +133,7 @@ function refreshWatch(instanceId) {
 
         video.addEventListener('ended', onEnded);
 
+        console.log("pause hook");
         video.addEventListener('pause', e => {
             console.log('Video paused.');
             console.log(`video duration: ${video.duration}, current: ${video.currentTime}, src: ${video.currentSrc}`);
@@ -121,15 +147,19 @@ function refreshWatch(instanceId) {
             }
             //ipcRenderer.send(`st-video-end-${instanceId}`, null);
         });
+
+        video.addEventListener("emptied", (e) => {
+            console.log("emptied");
+        })
     }
 
     //for mobile 
-    waitForElement(document.querySelector('.html5-video-player'), '.video-ads.ytp-ad-module', false, (adModule) => {
-        skipAds(adModule, video);
+    waitForElement(document.querySelector('.html5-video-player')!, '.video-ads.ytp-ad-module', false, (adModule) => {
+        skipAds(adModule, video!);
 
         if (adSkipObserver) adSkipObserver.disconnect();
         adSkipObserver = new MutationObserver(records => {
-            skipAds(adModule, video);
+            skipAds(adModule, video!);
         })
 
         adSkipObserver.observe(adModule, {
@@ -140,7 +170,7 @@ function refreshWatch(instanceId) {
     });
 
     //自動再生をオフ
-    waitForElement(document.querySelector('#player-control-container'), '.ytm-autonav-toggle-button-container', true, (autonavButton) => {
+    waitForElement(document.querySelector('#player-control-container')!, '.ytm-autonav-toggle-button-container', true, (autonavButton) => {
         disableAutoplay();
     });
 
@@ -150,14 +180,14 @@ function refreshWatch(instanceId) {
         if (popupObserver) popupObserver.disconnect();
         popupObserver = new MutationObserver(records => {
 
-            const dialogs = popup.querySelectorAll('tp-yt-paper-dialog');
+            const dialogs = popup.querySelectorAll<HTMLElement>('tp-yt-paper-dialog');
             for (let i = 0; i < dialogs.length; i++) {
                 let dialog = dialogs[i];
                 if (dialog.style.display !== 'none') {
                     const b = dialog.querySelector('a');
                     if (b) {
                         b.click();
-                        popupObserver.disconnect();
+                        popupObserver!.disconnect();
                         console.log('Confirmation skipped!');
                     }
                 }
@@ -173,7 +203,7 @@ function refreshWatch(instanceId) {
     }
 }
 
-function checkForError(container) {
+function checkForError(container: Element) {
     const errorMessage = container.querySelector('ytm-player-error-message-renderer');
     if (errorMessage) {
         console.log("error message appeared!");
@@ -182,7 +212,7 @@ function checkForError(container) {
     return false;
 }
 
-function hookVideo(video) {
+function hookVideo(video: HTMLVideoElement) {
     if (!video) return;
     if (!bypass) return;
 
@@ -192,15 +222,15 @@ function hookVideo(video) {
         //bypass.connect(audioContext.destination);
         console.log("Bypass connected!");
     } catch (error) {
-        console.log("Failed to connect bypass.");
+        console.error(error);
     }
 }
 
-function skipAds(adModule, video) {
+function skipAds(adModule: Element, video: HTMLVideoElement) {
     const adPlayer = adModule.querySelector('.ytp-ad-player-overlay');
 
     if (adPlayer) {
-        const skipButton = adPlayer.querySelector('.ytp-ad-skip-button');
+        const skipButton = adPlayer.querySelector<HTMLElement>('.ytp-ad-skip-button');
 
         if (skipButton) {
             console.log("Ad skipped by clicking the button.");
@@ -216,17 +246,17 @@ function skipAds(adModule, video) {
 }
 
 function disableAutoplay() {
-    const autonavButton = document.querySelector('.ytm-autonav-toggle-button-container');
-    const checked = autonavButton.getAttribute('aria-pressed');
+    const autonavButton = document.querySelector<HTMLElement>('.ytm-autonav-toggle-button-container');
+    const checked = autonavButton!.getAttribute('aria-pressed');
     if (checked === "true") {
         //const button = autonavButton.closest('button');
-        autonavButton.click();
+        autonavButton!.click();
         console.log("Autoplay disabled.");
         setTimeout(disableAutoplay, 500);
     }
 }
 
-function refreshPlaylist(instanceId) {
+function refreshPlaylist() {
 
     console.log("Fetching playlist...");
     const container = document.querySelector('ytm-app');//div#contents.ytd-playlist-video-list-renderer');
@@ -237,7 +267,7 @@ function refreshPlaylist(instanceId) {
     }
 
     //10秒経っても始まらなければ完了あつかい
-    fetchPlaylistInitialTimeoutId = setTimeout(() => {
+    fetchPlaylistInitialTimeoutId = window.setTimeout(() => {
         console.log("fetchPlaylistKernel timeout!")
         ipcRenderer.send(`st-playlist-item-${instanceId}`, null);
         if (fetchPlaylistTimeoutId) clearTimeout(fetchPlaylistTimeoutId);
@@ -256,20 +286,28 @@ function refreshPlaylist(instanceId) {
     });
 }
 
-let fetchPlaylistInitialTimeoutId;
-let fetchPlaylistTimeoutId;
+let fetchPlaylistInitialTimeoutId: number | undefined = undefined;
+let fetchPlaylistTimeoutId: number | undefined = undefined;
 
-function fetchPlaylistKernel(container, position, callback) {
+function fetchPlaylistKernel(container: Element, position: number, callback: (
+    completed: boolean,
+    item: {
+        type: 'YT_WATCH',
+        title: string,
+        watchId: string,
+        channel: string,
+        lengthSeconds: number | undefined
+    } | undefined) => void) {
     const innerContainer = container.querySelector('ytm-playlist-video-list-renderer');
     if (!innerContainer) {
 
         const alert = container.querySelector('ytm-alert-renderer');
         if (alert) {
-            callback(true);
+            callback(true, undefined);
             return;
         }
 
-        fetchPlaylistTimeoutId = setTimeout(() => fetchPlaylistKernel(container, position, callback), 500);
+        fetchPlaylistTimeoutId = window.setTimeout(() => fetchPlaylistKernel(container, position, callback), 500);
         return;
     }
 
@@ -286,6 +324,8 @@ function fetchPlaylistKernel(container, position, callback) {
 
     for (let i = position; i < children.length; i++) {
         const child = children.item(i);
+        if (!child) continue;
+
         const tagName = child.tagName.toLowerCase();
         if (tagName === 'ytm-continuation-item-renderer')//'ytd-continuation-item-renderer')
         {
@@ -299,18 +339,18 @@ function fetchPlaylistKernel(container, position, callback) {
 
         try {
 
-            const link = child.querySelector('a.compact-media-item-metadata-content')//'a#video-title');
-            const labelLength = child.querySelector('ytm-thumbnail-overlay-time-status-renderer > span.icon-text');
+            const link = child.querySelector<HTMLAnchorElement>('a.compact-media-item-metadata-content')//'a#video-title');
+            const labelLength = child.querySelector<HTMLElement>('ytm-thumbnail-overlay-time-status-renderer > span.icon-text');
 
             if (!link) continue;
 
             const href = link.href;
-            const title = link.querySelector('.compact-media-item-headline').innerText;//link.getAttribute('title');
+            const title = link.querySelector<HTMLElement>('.compact-media-item-headline')?.innerText;//link.getAttribute('title');
             const url = new URL(href, origin);
             const watchId = url.searchParams.get('v');
-            const channel = link.querySelector('.compact-media-item-byline').innerText;
+            const channel = link.querySelector<HTMLElement>('.compact-media-item-byline')?.innerText;
 
-            let lengthSeconds = void 0;
+            let lengthSeconds: number | undefined = undefined;
 
             if (labelLength) {
                 const lengthStr = labelLength.innerText;
@@ -320,6 +360,10 @@ function fetchPlaylistKernel(container, position, callback) {
                 if (segs.length > 1) lengthSeconds += parseInt(segs[1]) * 60;
                 if (segs.length > 2) lengthSeconds += parseInt(segs[2]) * 3600;
             }
+
+            if (!title) continue;
+            if (!watchId) continue;
+            if (!channel) continue;
 
             callback(false,
                 {
@@ -339,24 +383,23 @@ function fetchPlaylistKernel(container, position, callback) {
     console.log(`Items fetched from the playlist: ${fetched}, isLoading: ${isLoading}`);
 
     if (fetched == 0 && !isLoading) {
-        callback(true);
+        callback(true, undefined);
         return;
     }
 
     const doc = document.documentElement;
     const bottom = doc.scrollHeight - doc.clientHeight;
     window.scroll(0, bottom);
-    fetchPlaylistTimeoutId = setTimeout(() => fetchPlaylistKernel(container, position + fetched, callback), 500);
+    fetchPlaylistTimeoutId = window.setTimeout(() => fetchPlaylistKernel(container, position + fetched, callback), 500);
 }
 
-async function initializeBypass(instanceId, processorUrl) {
+async function initializeBypass() {
     console.log("initializing bypass...");
-
-    console.log(processorUrl);
 
     //console.log(require.resolve('electron'));
 
-    await audioContext.audioWorklet.addModule(processorUrl);
+    //await audioContext.audioWorklet.addModule(processorUrl);
+    await addBypassProcessorModule(audioContext);
     console.log("Bypass created");
     bypass = new BypassNode(audioContext);
 
@@ -370,7 +413,7 @@ async function initializeBypass(instanceId, processorUrl) {
 }
 
 class BypassNode extends AudioWorkletNode {
-    constructor(context) {
+    constructor(context: BaseAudioContext) {
         super(context, 'bypass-processor');
     }
 }

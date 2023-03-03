@@ -1,5 +1,7 @@
 export default interface RizumuItem {
-    title: string;
-    channel: string;
-    url: string;
+    get type(): string;
+    get title(): string;
+    get author(): string;
+    get url(): string;
+    get lengthSec(): number | undefined;
  }

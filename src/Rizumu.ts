@@ -1,16 +1,88 @@
 import { AudioPlayerStatus, createAudioPlayer, NoSubscriberBehavior, createAudioResource, StreamType, AudioPlayer } from '@discordjs/voice';
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, ipcMain, webContents } from 'electron';
 import path = require('path');
 import { Readable } from 'stream';
 import * as uuid from 'uuid';
+import ProviderManager from './providers/ProviderManager';
+import { RizumuProvider } from './providers/RizumuProvider';
 import RizumuItem from './RizumuItem';
-import fetchYtPlaylist from './YtPlaylistFetch';
-import fetchYtWatchItem from './YtWatchFetch';
-import YtWatchItem from './YtWatchItem';
 
 
+export type ProgressCallback = (data: { message: string }) => void;
 
-type ProgressCallback = (data: { message: string }) => void;
+type RizumuOptions = {
+    headless: boolean;
+    providers: RizumuProvider[];
+};
+
+class BrowserContainer {
+    private currentWindow?: BrowserWindow;
+    private currentPreloadPath?: string;
+    private headless: boolean;
+    private instanceId: string;
+
+    constructor(headless: boolean, instanceId: string) {
+        this.headless = headless;
+        this.instanceId = instanceId;
+    }
+
+    open(url: string, preloadPath: string) {
+        if (!this.currentWindow || preloadPath != this.currentPreloadPath) {
+
+            this.close();
+
+            const win = this.currentWindow = new BrowserWindow({
+                width: 450,
+                height: 400,
+                show: !this.headless,
+                webPreferences: {
+                    preload: preloadPath,
+                    //webviewTag: true,
+                    offscreen: this.headless,
+                    sandbox: false
+                }
+            });
+
+            win.webContents.setFrameRate(10);
+
+            win.webContents.addListener("console-message", (e, level, message) => {
+                if (level === void 0 || level === 0)
+                    console.log(`[${this.instanceId}] ${message}`)
+                else if (level === 1)
+                    console.info(`[${this.instanceId}] ${message}`)
+                else if (level === 2)
+                    console.warn(`[${this.instanceId}] ${message}`)
+                else if (level === 3)
+                    console.error(`[${this.instanceId}] ${message}`)
+            });
+
+            this.currentWindow = win;
+            this.currentPreloadPath = preloadPath;
+
+        }
+
+        const u = new URL(url);
+        u.searchParams.set("rizumu_instance_id", this.instanceId);
+
+        this.currentWindow.loadURL(u.toString());
+
+    }
+
+    close() {
+        this.currentWindow?.close();
+        this.currentWindow = undefined;
+
+        this.currentPreloadPath = undefined;
+    }
+
+    get isAlive() {
+        return this.currentWindow && !this.currentWindow.isDestroyed();
+    }
+
+    get currentWebContents() {
+        return this.currentWindow?.webContents;
+    }
+}
 
 class Rizumu {
 
@@ -20,28 +92,35 @@ class Rizumu {
         return this._instanceId;
     }
 
-
     private _headless: boolean;
 
     private _isAlive: boolean = true;
     private _isReady: boolean = false;
-    private _onReady: Function[] = [];
+    //private _onReady: Function[] = [];
     private _queue: RizumuItem[] = [];
     private _isBusy: boolean = false;
-    private _playingItem: RizumuItem = null;
+    private _playingItem?: RizumuItem;
     private _onUrlChanged: Array<(url: string) => void> = [];
     private _loopSingle: boolean = false;
-    private _audioStream: Readable;
-    private _window: BrowserWindow;
+    private _audioStream?: Readable;
 
-    private _player: AudioPlayer;
+    private _player?: AudioPlayer;
 
-    constructor(headless: boolean) {
+    private providers: ProviderManager = new ProviderManager();
+
+    private browser: BrowserContainer;
+
+    constructor(options: RizumuOptions) {
         const instanceId = uuid.v4();
 
         this._instanceId = instanceId;
-        this._headless = headless;
+        this._headless = options.headless;
 
+        for (const provider of options.providers) {
+            this.providers.registerProvider(provider);
+        }
+
+        /*
         const win = new BrowserWindow({
             width: 450,
             height: 400,
@@ -49,8 +128,8 @@ class Rizumu {
             webPreferences: {
                 preload: path.join(__dirname, '../src/renderer', 'rizumu-preload.js'),
                 webviewTag: true,
-
                 offscreen: this._headless,
+                sandbox: false
             }
         })
 
@@ -58,8 +137,11 @@ class Rizumu {
 
         const url = 'file://' + path.join(__dirname, `../src/public/rizumu.html`) + `?instance_id=${instanceId}`;
         win.loadURL(url);
+        */
+        this.browser = new BrowserContainer(this._headless, this.instanceId);
 
         ipcMain.on(`st-console-message-${instanceId}`, (e, arg) => {
+
             console.log(`[${instanceId}] ${arg.message}`);
         });
 
@@ -75,6 +157,7 @@ class Rizumu {
             this._audioStream?.push(samplesBuffer);
         });
 
+        /*
         this._onApi('st-ready', () => {
             this._log("ready")
             this._isReady = true;
@@ -83,13 +166,14 @@ class Rizumu {
             }
             this._onReady.splice(0);
         });
+        */
 
         this._onApi('st-video-end', () => {
             this._log(`st-video-end`);
             if (this._loopSingle && this._playingItem) {
                 this._playItemAsync(this._playingItem);
             } else {
-                this._playingItem = null;
+                this._playingItem = undefined;
                 this._updatePlayingItem();
             }
         });
@@ -101,8 +185,6 @@ class Rizumu {
             }
             this._onUrlChanged.splice(0);
         });
-
-        this._window = win;
     }
 
     getAudioPlayer() {
@@ -171,7 +253,7 @@ class Rizumu {
         });
         //resource.volume.setVolume(0.2);
 
-        this._player.play(resource);
+        this._player!.play(resource);
     }
 
     enqueueItem(item: RizumuItem, autoplay: boolean) {
@@ -188,16 +270,18 @@ class Rizumu {
     }
 
     isAlive() {
-        return this._isAlive && !this._window.isDestroyed();
+        return this._isAlive && this.browser.isAlive;// !this._window.isDestroyed();
     }
 
     close() {
         if (this.isAlive()) {
-            this._window.close();
+            //this._window.close();
+            this.browser.close();
             this._isAlive = false;
         }
     }
 
+    /*
     readyAsync() {
         if (this._isReady) {
             return new Promise((res, rej) => {
@@ -209,22 +293,32 @@ class Rizumu {
             });
         }
     }
+    */
 
     captureAsync() {
         return new Promise<Buffer>((res, rej) => {
-            this._window.webContents.once('paint', (event, dirty, image) => {
-                res(image.toPNG());
-            });
+            const c = this.browser.currentWebContents;
+            if (c) {
+                c.once('paint', (event, dirty, image) => {
+                    res(image.toPNG());
+                });
+            } else {
+                rej();
+            }
         });
     }
 
-    async playUrlAsync(url: URL, progress?: ProgressCallback) {
+    async pushUrlAsync(url: URL, progress?: ProgressCallback) {
         if (this._isBusy) {
             throw new Error('別の処理が実行中です。');
         }
         this._isBusy = true;
         try {
+            await this.providers.processAsync(url, (item) => {
+                this.enqueueItem(item, true);
+            }, progress);
 
+            /*
             if (!url.hostname.endsWith('youtube.com')) {
                 throw new Error('対応していないURLです。');
             }
@@ -239,6 +333,7 @@ class Rizumu {
             } else {
                 throw new Error('対応していないURLです。');
             }
+            */
         } finally {
             this._isBusy = false;
         }
@@ -257,20 +352,31 @@ class Rizumu {
         }
     }
 
-    private async _playItemAsync(item: RizumuItem) {
-        if (item instanceof YtWatchItem) {
-            let urlStr = `https://www.youtube.com/watch?v=${item.watchId}`;
-            this._log(`playing ${urlStr}`);
-            this._playingItem = item;
-            this._sendApi('op-play-watch', urlStr);
-            urlStr = await this._waitForUrlAsync();
-            const url = new URL(urlStr);
-            if (url.pathname !== '/watch' ||
-                url.searchParams.get('v') !== item.watchId)
-                throw new Error('正しく再生されませんでした。');
-        }
+    async playUrlAsync(url: URL, preloadPath: string) {
+        this._log(`playing ${url.toString()}`);
+        /*
+        this._sendApi('op-play-watch',
+            {
+                url: url.toString(),
+                preload: preloadPath
+            });
+            */
+
+        this.browser.open(url.toString(), preloadPath);
+        /*
+    const newUrl = await this._waitForUrlAsync();
+    if (newUrl !== url.toString()) throw new Error(`Failed to navigate: ${url.toString()}`);
+    */
     }
 
+    private async _playItemAsync(item: RizumuItem) {
+        this._playingItem = item;
+
+        this.providers.playItemAsync(this, item);
+
+    }
+
+    /*
     private _waitForUrlAsync() {
         this._log(`_waitForUrlAsync(): waiting for next url`);
         return new Promise<string>((res, rej) => {
@@ -280,37 +386,16 @@ class Rizumu {
             });
         })
     }
+    */
 
-    private async _playWatchAsync(url: URL, progress?: ProgressCallback) {
-        const watchId = url.searchParams.get('v');
-
-        const item = await fetchYtWatchItem(watchId);
-
-        this.enqueueItem(item, true);
-    }
-
-    private async _fetchListAsync(url: URL, progress?: ProgressCallback) {
-
-        const listId = url.searchParams.get('list');
-        if (!listId) return;
-
-        progress?.({ message: '再生リストをフェッチ中...' });
-        let count = 0;
-        await fetchYtPlaylist(listId, this._headless, (item) => {
-            this.enqueueItem(item, true);
-
-            count++;
-            if (count % 100 == 0) {
-                progress?.({ message: `再生リストをフェッチ中: ${count} アイテム` });
-            }
-        })
-    }
-
+    /*
     private _sendApi(eventName: string, data: any) {
         const channel = `${eventName}-${this._instanceId}`;
         console.log(`[RIZUMU] sending on ${channel}`);
-        this._window.webContents.send(channel, data);
+        //this._window.webContents.send(channel, data);
+        this.browser.currentWebContents?.send(channel, data);
     }
+    */
 
     private _onApi<T>(eventName: string, listener: (arg: T) => void) {
         const channel = `${eventName}-${this._instanceId}`;

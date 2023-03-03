@@ -8,6 +8,8 @@ instanceId = params.get('instance_id');
 console.log(instanceId);
 
 const { contextBridge, ipcRenderer } = require("electron");
+const path = require('path');
+const fs = require('fs');
 
 const rizumu = {
     on: (eventName, listener) => {
@@ -22,7 +24,15 @@ const rizumu = {
     }
 };
 
+const processorPath = 'bypass-processor.js';
+const processorSource = fs.readFileSync(path.join(__dirname, "../../src/public/", processorPath));
+const processorBlob = new Blob([processorSource.toString()], { type: 'text/javascript' });
+const processorUrl = URL.createObjectURL(processorBlob);
 
 contextBridge.exposeInMainWorld(
     "rizumu", rizumu
+);
+
+contextBridge.exposeInMainWorld(
+    "processorUrl", processorUrl
 );

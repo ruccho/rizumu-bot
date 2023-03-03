@@ -2,9 +2,10 @@
 logRenderer('yt-host');
 
 let params = new URLSearchParams(location.search);
-const instance_id = params.get('instance_id');
+const instanceId = params.get('instance_id');
 
-logRenderer(instance_id);
+
+logRenderer(instanceId);
 
 var webview = document.getElementById('webview-main');
 
@@ -14,16 +15,62 @@ webview.addEventListener("did-finish-load", function () {
 
     if (!isInitialized) {
         //webview.openDevTools();
-        webview.send("initialize", instance_id);
+        webview.send("initialize", {
+            instanceId: instanceId,
+            processorUrl: window.processorUrl
+        });
         isInitialized = true;
         return;
     }
 
-    webview.send("refresh", instance_id);
+    webview.send("refresh", {
+        instanceId: instanceId,
+        processorUrl: processorUrl
+    });
     window.rizumu.send('st-url-changed', {
         url: webview.getURL()
     })
 });
+
+window.rizumu.on('op-play-watch', data => {
+    const urlStr = data.url;
+    const preload = data.preload;
+
+    logRenderer("op-play-watch: " + urlStr);
+    const url = new URL(urlStr);
+
+    webview.loadURL(url.toString());
+    logRenderer("loaded");
+});
+
+window.rizumu.on('op-fetch-list', (listId) => {
+    logRenderer("op-fetch-list: " + listId);
+
+    //webview.preload = "yt-preload";
+    const rebuiltUrl = `https://m.youtube.com/playlist?app=m&list=${listId}`;
+    webview.loadURL(rebuiltUrl);
+});
+
+webview.addEventListener('console-message', e => {
+    logWebview(e.message, e.level);
+})
+
+function logRenderer(message) {
+    console.log(`[RENDERER] ${message}`)
+    window.rizumu.send('st-console-message', { message: `[RENDERER] ${message}` });
+}
+
+function logWebview(message, level) {
+    window.rizumu.send('st-console-message', { message: `[WEBVIEW] ${message}` });
+    if (level === void 0 || level === 0)
+        console.log(`[WEBVIEW] ${message}`)
+    else if (level === 1)
+        console.info(`[WEBVIEW] ${message}`)
+    else if (level === 2)
+        console.warn(`[WEBVIEW] ${message}`)
+    else if (level === 3)
+        console.error(`[WEBVIEW] ${message}`)
+}
 
 /*
 const events = [
@@ -52,40 +99,3 @@ for (let ev of events) {
     })
 }
 */
-
-window.rizumu.on('op-play-watch', (urlStr) => {
-    logRenderer("op-play-watch: " + urlStr);
-    const url = new URL(urlStr);
-    const watchId = url.searchParams.get('v');
-
-    const rebuiltUrl = `https://m.youtube.com/watch?app=m&v=${watchId}`;
-    webview.loadURL(rebuiltUrl);
-});
-
-window.rizumu.on('op-fetch-list', (listId) => {
-    logRenderer("op-fetch-list: " + listId);
-
-    const rebuiltUrl = `https://m.youtube.com/playlist?app=m&list=${listId}`;
-    webview.loadURL(rebuiltUrl);
-});
-
-webview.addEventListener('console-message', e => {
-    logWebview(e.message, e.level);
-})
-
-function logRenderer(message) {
-    console.log(`[RENDERER] ${message}`)
-    window.rizumu.send('st-console-message', {message: `[RENDERER] ${message}`});
-}
-
-function logWebview(message, level) {
-    window.rizumu.send('st-console-message', {message: `[WEBVIEW] ${message}`});
-    if (level === void 0 || level === 0)
-        console.log(`[WEBVIEW] ${message}`)
-    else if (level === 1)
-        console.info(`[WEBVIEW] ${message}`)
-    else if (level === 1)
-        console.warn(`[WEBVIEW] ${message}`)
-    else if (level === 1)
-        console.error(`[WEBVIEW] ${message}`)
-}

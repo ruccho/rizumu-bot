@@ -1,20 +1,22 @@
 import { app, BrowserWindow, dialog } from 'electron';
-import { Client, Intents, MessageEmbed, MessageAttachment, CommandInteraction, GuildMember } from 'discord.js';
+import { Client, Intents, MessageEmbed, MessageAttachment, CommandInteraction, GuildMember, VoiceChannel } from 'discord.js';
 import {
     VoiceConnectionStatus,
     joinVoiceChannel,
     getVoiceConnection,
-    entersState
+    entersState,
+    VoiceConnection
 } from '@discordjs/voice';
 
-const config = require('../state/config.json');
+import config from './Config';
 import Rizumu from './Rizumu';
 const state = require('../state/state.json');
 import commandRegisterer from './SlashCommandRegisterer';
+import YtWatchProvider from './providers/yt/YtWatchProvider';
 
 const { discord_token, rizumu_command_prefix } = config;
-const silentMode = config.rizumu_silent;
-const headlessMode = config.rizumu_headless;
+const silentMode: boolean = config.rizumu_silent;
+const headlessMode: boolean = config.rizumu_headless;
 
 //app.disableHardwareAcceleration();
 
@@ -31,7 +33,7 @@ async function intiializeElectron() {
     const killBlock = new BrowserWindow({
         show: false
     });
-    killBlock.loadFile('./src/public/killblock.html');
+    killBlock.loadFile('../src/public/killblock.html');
 }
 
 intiializeElectron();
@@ -50,6 +52,8 @@ client.on('interactionCreate', async interaction => {
         const subcommand = interaction.options.getSubcommand();
         if (subcommand === 'leave') {
             const guild = interaction.guild;
+            if(!guild) return;
+
             const guildId = guild.id;
             const guildState = getGuildState(guildId);
 
@@ -58,7 +62,7 @@ client.on('interactionCreate', async interaction => {
                 if (connection) connection.destroy();
             }
 
-            if (guildState._rizumu) {
+            if (guildState?._rizumu) {
                 guildState._rizumu.close();
             }
 
@@ -71,11 +75,15 @@ client.on('interactionCreate', async interaction => {
         } else if (subcommand === 'play') {
 
             const guild = interaction.guild;
+            if(!guild) return;
+
             const guildId = guild.id;
             const guildState = await validateGuildState(interaction);
             if (!guildState) return;
 
             const urlStr = interaction.options.getString('url');
+            if(!urlStr) return;
+
             console.log(urlStr);
             const url = new URL(urlStr);
 
@@ -85,30 +93,31 @@ client.on('interactionCreate', async interaction => {
                 .setColor('GREY');
             await interaction.reply({ embeds: [em] });
 
-            let voiceChannel;
+            let voiceChannel: VoiceChannel | undefined;
             if (!silentMode) {
                 //join voiceChannel
-                voiceChannel = (interaction.member as GuildMember).voice.channel;
-                if (!voiceChannel) {
+                const channel = (interaction.member as GuildMember).voice.channel;
+                if (!channel || channel.type == "GUILD_STAGE_VOICE") {
                     await followUpError(interaction, 'ボイスチャンネルに参加してから使用してください。');
                     return;
                 }
+                voiceChannel = channel;
                 console.log("[MAIN] VoiceChannel: " + voiceChannel.id);
             }
 
-            let connection;
+            let connection: VoiceConnection | undefined;
             if (!silentMode) {
                 connection = getVoiceConnection(guild.id);
 
                 if (!connection) {
                     console.log("[MAIN] Join to channel");
                     connection = joinVoiceChannel({
-                        channelId: voiceChannel.id,
+                        channelId: voiceChannel!.id,
                         guildId: guildId,
                         adapterCreator: guild.voiceAdapterCreator,
                     });
 
-                    connection.on(VoiceConnectionStatus.Connecting, () => {
+                    connection.on(VoiceConnectionStatus.Connecting, (oldState, newState) => {
                         console.log('[MAIN] VoiceConnection connecting');
                     });
                     connection.on(VoiceConnectionStatus.Ready, () => {
@@ -143,17 +152,22 @@ client.on('interactionCreate', async interaction => {
                 await interaction.editReply({ embeds: [em] });
 
                 console.log('[MAIN] Creating Rizumu instance...');
-                guildState._rizumu = new Rizumu(headlessMode);
+                guildState._rizumu = new Rizumu({
+                    headless: headlessMode,
+                    providers: [
+                        new YtWatchProvider()
+                    ]
+                });
             }
 
             if (!silentMode) {
-                connection.subscribe(guildState._rizumu.getAudioPlayer());
+                connection!.subscribe(guildState._rizumu.getAudioPlayer());
             }
 
             try {
-                await guildState._rizumu.readyAsync();
+                //await guildState._rizumu.readyAsync();
 
-                await guildState._rizumu.playUrlAsync(url, async progress => {
+                await guildState._rizumu.pushUrlAsync(url, async progress => {
                     em = new MessageEmbed()
                         .setDescription(`▶ ${progress.message}`)
                         .setColor('GREY');
@@ -173,6 +187,8 @@ client.on('interactionCreate', async interaction => {
 
         } else if (subcommand === 'next') {
             const guild = interaction.guild;
+            if(!guild) return;
+
             const guildId = guild.id;
             const guildState = await validateGuildState(interaction);
             if (!guildState) return;
@@ -199,6 +215,8 @@ client.on('interactionCreate', async interaction => {
         } else if (subcommand === 'capture') {
 
             const guild = interaction.guild;
+            if(!guild) return;
+
             const guildId = guild.id;
             const guildState = await validateGuildState(interaction);
             if (!guildState) return;
@@ -223,6 +241,8 @@ client.on('interactionCreate', async interaction => {
         } else if (subcommand === 'info') {
 
             const guild = interaction.guild;
+            if(!guild) return;
+            
             const guildId = guild.id;
             const guildState = await validateGuildState(interaction);
             if (!guildState) return;
@@ -244,13 +264,15 @@ client.on('interactionCreate', async interaction => {
             em = new MessageEmbed()
                 .setAuthor('🎧 Now Playing')
                 .setTitle(playingItem.title)
-                .setFooter(playingItem.channel)
+                .setFooter(playingItem.author)
                 .setURL(playingItem.url)
                 .setColor('GREY');
             await interaction.reply({ embeds: [em] });
         } else if (subcommand === 'queue') {
 
             const guild = interaction.guild;
+            if(!guild) return;
+            
             const guildId = guild.id;
             const guildState = await validateGuildState(interaction);
             if (!guildState) return;
@@ -282,6 +304,8 @@ client.on('interactionCreate', async interaction => {
         } else if (subcommand === 'clear') {
 
             const guild = interaction.guild;
+            if(!guild) return;
+            
             const guildId = guild.id;
             const guildState = await validateGuildState(interaction);
             if (!guildState) return;
@@ -304,6 +328,8 @@ client.on('interactionCreate', async interaction => {
         } else if (subcommand === 'shuffle') {
 
             const guild = interaction.guild;
+            if(!guild) return;
+            
             const guildId = guild.id;
             const guildState = await validateGuildState(interaction);
             if (!guildState) return;
@@ -330,6 +356,8 @@ client.on('interactionCreate', async interaction => {
         } else if (subcommand === 'loop') {
 
             const guild = interaction.guild;
+            if(!guild) return;
+            
             const guildId = guild.id;
             const guildState = await validateGuildState(interaction);
             if (!guildState) return;
@@ -382,7 +410,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 
                 if (guildState._rizumu) {
                     guildState._rizumu.close();
-                    guildState._rizumu = null;
+                    guildState._rizumu = undefined;
                 }
 
             }
@@ -417,6 +445,8 @@ function assertGuildState(state: any): state is GuildState {
 
 async function validateGuildState(interaction: CommandInteraction) {
     const guild = interaction.guild;
+    if(!guild) return false;
+    
     const guildId = guild.id;
     const guildState = getGuildState(guildId);
 
