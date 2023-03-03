@@ -6,6 +6,7 @@ import config from '../Config';
 import { entersState, getVoiceConnection, joinVoiceChannel, VoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
 import Rizumu from "../Rizumu";
 import YtWatchProvider from "../providers/yt/YtWatchProvider";
+import { PublicError } from "../PublicError";
 
 const silentMode = config.rizumu_silent;
 const headlessMode = config.rizumu_headless;
@@ -134,7 +135,12 @@ export default class PlayCommand implements RizumuCommand {
                 await interaction.editReply({ embeds: [em] });
             });
         } catch (error) {
-            await followUpError(interaction, '失敗しました。');
+            if(error instanceof PublicError)
+            {
+                await followUpError(interaction, error.message);
+            }else{
+                await followUpError(interaction, '失敗しました。');
+            }
             throw error;
         }
         em = new EmbedBuilder()

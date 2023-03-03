@@ -1,4 +1,7 @@
 {
 	"discord_token": "",
-	"discord_client_id": ""
+	"discord_client_id": "",
+	"rizumu_command_prefix": "r",
+	"rizumu_headless": true,
+	"rizumu_silent": false
 }

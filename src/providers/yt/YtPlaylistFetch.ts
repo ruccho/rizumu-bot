@@ -70,7 +70,7 @@ export default async function fetchYtPlaylist(listId: string, headless: boolean,
             });
         });
 
-        return completePromise;
+        await completePromise;
     } finally {
         clearTimeout(state.timeoutId);
         browser.close();

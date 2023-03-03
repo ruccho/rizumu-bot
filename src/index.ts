@@ -32,7 +32,7 @@ async function intiializeElectron() {
     const killBlock = new BrowserWindow({
         show: false
     });
-    killBlock.loadFile('../src/public/killblock.html');
+    killBlock.loadFile('../public/killblock.html');
 }
 
 intiializeElectron();

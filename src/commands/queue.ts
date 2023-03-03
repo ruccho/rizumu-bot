@@ -37,7 +37,7 @@ export default class QueueCommand implements RizumuCommand {
 
         for (let i = 0; i < count; i++) {
             const item = queue[i];
-            em.addFields({name: `#${i}`, value: item.toString()});
+            em.addFields({name: `#${i}`, value: item.title});
         }
 
         await interaction.reply({ embeds: [em] });

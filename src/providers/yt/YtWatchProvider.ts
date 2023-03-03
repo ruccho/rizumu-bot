@@ -8,7 +8,7 @@ import path from "path";
 
 export class YtWatchItem implements RizumuItem {
 
-    readonly type: string = 'YT_WATCH';
+    readonly type: 'YT_WATCH' = 'YT_WATCH';
     readonly watchId: string;
     readonly title: string;
     readonly channel: string;
