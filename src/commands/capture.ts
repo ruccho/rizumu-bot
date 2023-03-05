@@ -21,7 +21,7 @@ export default class CaptureCommand implements RizumuCommand {
 
         let em;
 
-        if (!guildState.runtime.rizumu || !guildState.runtime.rizumu.isAlive()) {
+        if (!guildState.runtime.rizumu) {
             await followUpError(interaction, 'Rizumuが非アクティブです。');
             return;
         }

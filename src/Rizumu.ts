@@ -25,10 +25,7 @@ class Rizumu {
     }
 
     private _headless: boolean;
-
-    private _isAlive: boolean = true;
-    private _isReady: boolean = false;
-    //private _onReady: Function[] = [];
+    
     private _queue: RizumuItem[] = [];
     private _isBusy: boolean = false;
     private _playingItem?: RizumuItem;

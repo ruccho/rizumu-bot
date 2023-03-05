@@ -20,7 +20,7 @@ export default class NextCommand implements RizumuCommand {
 
         let em;
 
-        if (!guildState.runtime.rizumu || !guildState.runtime.rizumu.isAlive()) {
+        if (!guildState.runtime.rizumu) {
             em = new EmbedBuilder()
                 .setDescription(`なにも再生していません。`)
                 .setColor(Colors.Grey);

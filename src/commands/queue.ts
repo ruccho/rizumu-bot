@@ -19,7 +19,7 @@ export default class QueueCommand implements RizumuCommand {
     async execute(interaction: ChatInputCommandInteraction<CacheType>, guildState: GuildState, guild: Guild): Promise<void> {
         let em;
 
-        if (!guildState.runtime.rizumu || !guildState.runtime.rizumu.isAlive()) {
+        if (!guildState.runtime.rizumu) {
             await interaction.reply({ embeds: [getErrorEmbed('なにも再生していません。')] });
             return;
         }

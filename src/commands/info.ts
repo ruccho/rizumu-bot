@@ -20,7 +20,7 @@ export default class InfoCommand implements RizumuCommand {
 
         let em;
 
-        if (!guildState.runtime.rizumu || !guildState.runtime.rizumu.isAlive()) {
+        if (!guildState.runtime.rizumu) {
             await interaction.reply({ embeds: [getErrorEmbed('なにも再生していません。')] });
             return;
         }

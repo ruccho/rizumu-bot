@@ -103,7 +103,7 @@ export default class PlayCommand implements RizumuCommand {
             }
         }
 
-        if (!guildState.runtime.rizumu || !guildState.runtime.rizumu.isAlive()) {
+        if (!guildState.runtime.rizumu) {
 
             em = new EmbedBuilder()
                 .setDescription('▶ Rizumuを起動中...')

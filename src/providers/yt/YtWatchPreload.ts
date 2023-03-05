@@ -1,25 +1,23 @@
 import { addBypassProcessorModule } from "../../RizumuPreloadLib";
 import { ipcRenderer, contextBridge } from "electron";
 
-
-console.log('yt-preload');
-
-const audioContext = new AudioContext({
-    sampleRate: 48000
-});
-
-let bypass: BypassNode | undefined = undefined;
-
 declare var window: Window & {
     rizumu: {
         instanceId: string;
     }
 }
 
+
 const instanceId = (new URL(location.href)).searchParams.get("rizumu_instance_id");
 
-console.log(document);
-console.log(instanceId);
+console.log(`YtWatchPreload for ${instanceId}`);
+
+
+const audioContext = new AudioContext({
+    sampleRate: 48000
+});
+
+let bypass: BypassNode | undefined = undefined;
 
 window.addEventListener("load", async (e) => {
     console.log("onload");
