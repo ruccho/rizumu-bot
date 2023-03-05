@@ -4,7 +4,7 @@ import { Client, CommandInteraction, Events, GatewayIntentBits, EmbedBuilder, Co
 import config from './Config';
 import Rizumu from './Rizumu';
 import state from "./State";
-import { CommandManager } from './CommandManager';
+import { CommandManager, getGuildState } from './CommandManager';
 import CaptureCommand from './commands/capture';
 import ClearCommand from './commands/clear';
 import InfoCommand from './commands/info';
@@ -14,6 +14,7 @@ import NextCommand from './commands/next';
 import PlayCommand from './commands/play';
 import QueueCommand from './commands/queue';
 import ShuffleCommand from './commands/shuffle';
+import { getVoiceConnection } from '@discordjs/voice';
 
 const { discord_token } = config;
 
@@ -60,6 +61,40 @@ client.on(Events.InteractionCreate, async interaction => {
 
     commandManager.process(interaction);
 
+});
+
+client.on('voiceStateUpdate', (oldState, newState) => {
+    if (oldState.channel && oldState.channelId !== newState.channelId) {
+        console.log(`[MAIN] A guild member has been moved from ${oldState.channelId} to ${newState.channelId}`);
+
+        let realMemberCount = 0;
+        for (let member of oldState.channel.members) {
+            if (!member[1].user.bot) realMemberCount++;
+        }
+
+        console.log(`[MAIN] ${realMemberCount} real members`);
+
+        if (realMemberCount > 0) return;
+
+        const guild = newState.guild;
+        const guildId = guild.id;
+        const guildState = getGuildState(guildId);
+        if (!guildState) return;
+
+        const connection = getVoiceConnection(guild.id);
+        if (connection) {
+            const channelId = connection.joinConfig.channelId;
+            if (oldState.channelId === channelId) {
+                connection.destroy();
+
+                if (guildState.runtime.rizumu) {
+                    guildState.runtime.rizumu.close();
+                    guildState.runtime.rizumu = undefined;
+                }
+
+            }
+        }
+    }
 });
 
 (async () => {

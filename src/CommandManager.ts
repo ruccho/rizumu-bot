@@ -12,7 +12,7 @@ export interface RizumuCommand {
     execute(interaction: ChatInputCommandInteraction, guildState: GuildState, guild: Guild): Promise<void>
 }
 
-function getGuildState(guildId: string) {
+export function getGuildState(guildId: string) {
     return state.guilds[guildId];
 }
 
