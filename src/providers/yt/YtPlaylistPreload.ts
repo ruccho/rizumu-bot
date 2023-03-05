@@ -10,10 +10,16 @@ const instanceId = (new URL(location.href)).searchParams.get("rizumu_instance_id
 
 console.log(`YtPlaylistPreload for ${instanceId}`);
 
+document.addEventListener("DOMContentLoaded", (e) =>{
+    refreshPlaylist();
+})
+
+/*
 window.addEventListener("load", async (e) => {
     console.log("onload");
     refreshPlaylist();
 });
+*/
 
 function refreshPlaylist() {
 
