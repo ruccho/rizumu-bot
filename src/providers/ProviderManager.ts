@@ -2,6 +2,7 @@ import { PublicError } from "../PublicError";
 import Rizumu, { ProgressCallback } from "../Rizumu";
 import RizumuItem from "../RizumuItem";
 import { RizumuProvider } from "./RizumuProvider";
+import { ICancellationToken } from "../CancellationToken";
 
 type TypeDef<T> = new (...args: any) => T;
 
@@ -17,13 +18,13 @@ export default class ProviderManager {
         return this.providers.get(itemClassDef);
     }
 
-    async processAsync(url: URL, emitItem: (item: RizumuItem) => void, progress?: ProgressCallback)
+    async processAsync(url: URL, emitItem: (item: RizumuItem) => void, progress?: ProgressCallback, ct?: ICancellationToken)
     {
         for(const [_, provider] of this.providers)
         {
             if(provider.match(url))
             {
-                await provider.processAsync(url, emitItem, progress);
+                await provider.processAsync(url, emitItem, progress, ct);
                 return;
             }
         }

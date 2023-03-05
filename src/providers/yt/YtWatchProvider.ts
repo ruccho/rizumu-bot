@@ -5,6 +5,8 @@ import fetchYtPlaylist from "./YtPlaylistFetch";
 import config from "../../Config";
 import fetch from 'node-fetch';
 import path from "path";
+import { ICancellationToken } from "../../CancellationToken";
+import { PublicError } from "../../PublicError";
 
 export class YtWatchItem implements RizumuItem {
 
@@ -78,7 +80,7 @@ async function fetchYtWatchItem(watchId: string) {
 
 }
 
-async function fetchListAsync(url: URL, emitItem: (item: YtWatchItem) => void, progress?: ProgressCallback) {
+async function fetchListAsync(url: URL, emitItem: (item: YtWatchItem) => void, progress?: ProgressCallback, ct?: ICancellationToken) {
 
     const listId = url.searchParams.get('list');
     if (!listId) return;
@@ -92,7 +94,7 @@ async function fetchListAsync(url: URL, emitItem: (item: YtWatchItem) => void, p
         if (count % 100 == 0) {
             progress?.({ message: `再生リストをフェッチ中: ${count} アイテム` });
         }
-    })
+    }, ct)
 }
 
 export default class YtWatchProvider implements RizumuProvider {
@@ -105,20 +107,21 @@ export default class YtWatchProvider implements RizumuProvider {
         return url.pathname === '/watch' || url.pathname === '/playlist';
     }
 
-    async processAsync(url: URL, emitItem: (item: YtWatchItem) => void, progress?: ProgressCallback): Promise<void> {
+    async processAsync(url: URL, emitItem: (item: YtWatchItem) => void, progress?: ProgressCallback, ct?: ICancellationToken): Promise<void> {
         if (url.pathname === '/watch') {
             const watchId = url.searchParams.get('v');
             if (!watchId) return;
             const fetched = await fetchYtWatchItem(watchId);
+            if(ct?.isCancellationRequested) throw new PublicError("キャンセルされました。");
             if(fetched) emitItem(fetched);
         } else if (url.pathname === '/playlist') {
-            await fetchListAsync(url, emitItem, progress);
+            await fetchListAsync(url, emitItem, progress, ct);
         }
     }
 
     async playItemAsync(rizumu: Rizumu, item: YtWatchItem): Promise<void> {
         const url = new URL(`https://m.youtube.com/watch?app=m&v=${item.watchId}`);
-        await rizumu.playUrlAsync(url, path.join(__dirname, 'YtPreload.js'));
+        await rizumu.playUrlAsync(url, path.join(__dirname, 'YtWatchPreload.js'));
     }
 
 

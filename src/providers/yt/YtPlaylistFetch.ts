@@ -4,6 +4,7 @@ import * as path from 'path';
 import { YtWatchItem } from "./YtWatchProvider";
 import { BrowserContainer } from "../../BrowserContainer";
 import { PublicError } from "../../PublicError";
+import { ICancellationToken } from "../../CancellationToken";
 
 function log(instanceId: string, message: string) {
     console.log(`[${instanceId}] [PLAYLIST] ${message}`);
@@ -23,7 +24,7 @@ function onApi<T>(instanceId: string, eventName: string, listener: (data: T) => 
     });
 }
 
-export default async function fetchYtPlaylist(listId: string, headless: boolean, onItem: (item: YtWatchItem) => void) {
+export default async function fetchYtPlaylist(listId: string, headless: boolean, onItem: (item: YtWatchItem) => void, ct?: ICancellationToken) {
 
     const instanceId = uuid.v4();
 
@@ -32,7 +33,7 @@ export default async function fetchYtPlaylist(listId: string, headless: boolean,
 
     const url = new URL(`https://m.youtube.com/playlist?app=m&list=${listId}`);
     url.searchParams.set("rizumu_instance_id", instanceId);
-    browser.open(url.toString(), path.join(__dirname, 'YtPreload.js'));
+    browser.open(url.toString(), path.join(__dirname, 'YtPlaylistPreload.js'));
 
     const fetchTimeoutMs = 30_000;
 
@@ -41,6 +42,11 @@ export default async function fetchYtPlaylist(listId: string, headless: boolean,
     } = {
         timeoutId: undefined
     };
+
+    const cancellationError = new PublicError("キャンセルされました。");
+
+    if (ct?.isCancellationRequested) throw cancellationError;
+
     try {
 
         const completePromise = new Promise<void>((res, rej) => {
@@ -51,13 +57,19 @@ export default async function fetchYtPlaylist(listId: string, headless: boolean,
 
             state.timeoutId = setTimeout(fetchTimeout, fetchTimeoutMs);
 
+            ct?.subscribe(() => {
+                rej(cancellationError);
+            });
+
             onApi<{ type: string }>(instanceId, 'st-playlist-item', item => {
+
+                if (ct?.isCancellationRequested) return;
 
                 clearTimeout(state.timeoutId);
                 state.timeoutId = undefined;
 
                 if (item) {
-                    
+
                     state.timeoutId = setTimeout(fetchTimeout, fetchTimeoutMs);
 
                     const fined = YtWatchItem.assertAndInstantiate(item);

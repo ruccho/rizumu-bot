@@ -24,6 +24,7 @@ export default class LeaveCommand implements RizumuCommand {
         }
 
         guildState.runtime.rizumu?.close();
+        guildState.runtime.rizumu = undefined;
 
         const em = new EmbedBuilder()
             .setColor(Colors.Grey)
