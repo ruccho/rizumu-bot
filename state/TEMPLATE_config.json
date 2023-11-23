@@ -3,5 +3,6 @@
 	"discord_client_id": "<DISCORD CLIENT ID HERE>",
 	"rizumu_command_prefix": "r",
 	"rizumu_headless": true,
-	"rizumu_silent": false
+	"rizumu_silent": false,
+	"rizumu_playlist_fetch_desktop": true
 }

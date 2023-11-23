@@ -87,7 +87,7 @@ async function fetchListAsync(url: URL, emitItem: (item: YtWatchItem) => void, p
 
     progress?.({ message: '再生リストをフェッチ中...' });
     let count = 0;
-    await fetchYtPlaylist(listId, config.rizumu_headless, (item) => {
+    await fetchYtPlaylist(listId, config.rizumu_headless, config.rizumu_playlist_fetch_desktop, (item) => {
         emitItem(item);
 
         count++;

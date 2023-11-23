@@ -24,16 +24,25 @@ function onApi<T>(instanceId: string, eventName: string, listener: (data: T) => 
     });
 }
 
-export default async function fetchYtPlaylist(listId: string, headless: boolean, onItem: (item: YtWatchItem) => void, ct?: ICancellationToken) {
+export default async function fetchYtPlaylist(listId: string, headless: boolean, desktop: boolean, onItem: (item: YtWatchItem) => void, ct?: ICancellationToken) {
 
     const instanceId = uuid.v4();
 
     const browser = new BrowserContainer(headless, instanceId, "PLAYLIST-BROWSER");
     log(instanceId, 'ready');
 
-    const url = new URL(`https://m.youtube.com/playlist?app=m&list=${listId}`);
+    let url;
+    let preload;
+    if (desktop) {
+        url = new URL(`https://www.youtube.com/playlist?app=desktop&list=${listId}`);
+        preload = 'YtPlaylistDesktopPreload.js';
+    } else {
+        url = new URL(`https://m.youtube.com/playlist?app=m&list=${listId}`);
+        preload = 'YtPlaylistPreload.js';
+    }
+
     url.searchParams.set("rizumu_instance_id", instanceId);
-    browser.open(url.toString(), path.join(__dirname, 'YtPlaylistPreload.js'));
+    browser.open(url.toString(), path.join(__dirname, preload));
 
     const fetchTimeoutMs = 30_000;
 
