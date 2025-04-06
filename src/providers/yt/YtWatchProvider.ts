@@ -103,19 +103,30 @@ export default class YtWatchProvider implements RizumuProvider {
     }
 
     match(url: URL): boolean {
-        if (!url.hostname.endsWith('youtube.com')) return false;
-        return url.pathname === '/watch' || url.pathname === '/playlist';
+        if (url.hostname.endsWith('youtube.com')) {
+            return url.pathname === '/watch' || url.pathname === '/playlist';
+        } else if (url.hostname.endsWith('youtu.be')) {
+            return true;
+        }
+        return false;
     }
 
     async processAsync(url: URL, emitItem: (item: YtWatchItem) => void, progress?: ProgressCallback, ct?: ICancellationToken): Promise<void> {
-        if (url.pathname === '/watch') {
-            const watchId = url.searchParams.get('v');
-            if (!watchId) return;
+        if (url.hostname.endsWith('youtube.com')) {
+            if (url.pathname === '/watch') {
+                const watchId = url.searchParams.get('v');
+                if (!watchId) return;
+                const fetched = await fetchYtWatchItem(watchId);
+                if (ct?.isCancellationRequested) throw new PublicError("キャンセルされました。");
+                if (fetched) emitItem(fetched);
+            } else if (url.pathname === '/playlist') {
+                await fetchListAsync(url, emitItem, progress, ct);
+            }
+        } else if (url.hostname.endsWith('youtu.be')) {
+            const watchId = url.pathname.substring(1);
             const fetched = await fetchYtWatchItem(watchId);
-            if(ct?.isCancellationRequested) throw new PublicError("キャンセルされました。");
-            if(fetched) emitItem(fetched);
-        } else if (url.pathname === '/playlist') {
-            await fetchListAsync(url, emitItem, progress, ct);
+            if (ct?.isCancellationRequested) throw new PublicError("キャンセルされました。");
+            if (fetched) emitItem(fetched);
         }
     }
 
