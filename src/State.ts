@@ -1,5 +1,5 @@
-import { Guild } from "discord.js";
 import Rizumu from "./Rizumu";
+import * as state from '../state/state.json';
 
 type GuildStateRaw = { id: string, commandVersion: number };
 export type GuildState = GuildStateRaw & {
@@ -8,16 +8,11 @@ export type GuildState = GuildStateRaw & {
     }
 };
 
-const state: {
-    guilds: { [guildId: string]: GuildStateRaw }
-} = require('../state/state.json');
-
 const runtimeState: {
     guilds: { [guildId: string]: GuildState | undefined }
 } = { guilds: {} };
 
-for(const [key, value] of Object.entries(state.guilds))
-{
+for (const [key, value] of Object.entries(state.guilds)) {
     runtimeState.guilds[key] = {
         ...value,
         runtime: {

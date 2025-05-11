@@ -1,9 +1,7 @@
 import { app, BrowserWindow, dialog } from 'electron';
-import { Client, CommandInteraction, Events, GatewayIntentBits, EmbedBuilder, Colors } from 'discord.js';
+import { Client, Events, GatewayIntentBits } from 'discord.js';
 
 import config from './Config';
-import Rizumu from './Rizumu';
-import state from "./State";
 import { CommandManager, getGuildState } from './CommandManager';
 import CaptureCommand from './commands/capture';
 import ClearCommand from './commands/clear';
@@ -46,15 +44,15 @@ client.once('ready', async () => {
 });
 
 const commandManager = new CommandManager(
-    new CaptureCommand(),
-    new ClearCommand(),
-    new InfoCommand(),
-    new LeaveCommand(),
-    new LoopCommand(),
-    new NextCommand(),
-    new PlayCommand(),
-    new QueueCommand(),
-    new ShuffleCommand()
+    CaptureCommand,
+    ClearCommand,
+    InfoCommand,
+    LeaveCommand,
+    LoopCommand,
+    NextCommand,
+    PlayCommand,
+    QueueCommand,
+    ShuffleCommand
 )
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -68,7 +66,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
         console.log(`[MAIN] A guild member has been moved from ${oldState.channelId} to ${newState.channelId}`);
 
         let realMemberCount = 0;
-        for (let member of oldState.channel.members) {
+        for (const member of oldState.channel.members) {
             if (!member[1].user.bot) realMemberCount++;
         }
 

@@ -8,42 +8,39 @@ import path from "path";
 import { ICancellationToken } from "../../CancellationToken";
 import { PublicError } from "../../PublicError";
 
-export class YtWatchItem implements RizumuItem {
+export type YtWatchItem = RizumuItem & {
+    type: 'YT_WATCH';
+    watchId: string;
+}
 
-    readonly type: 'YT_WATCH' = 'YT_WATCH';
-    readonly watchId: string;
-    readonly title: string;
-    readonly channel: string;
-    readonly lengthSec: number | undefined;
-
-    get author(): string {
-        return this.channel;
+function createYtWatchItem(watchId: string, title: string, channel: string, lengthSec?: number): YtWatchItem {
+    return {
+        type: 'YT_WATCH',
+        watchId: watchId,
+        title: title,
+        author: channel,
+        lengthSec: lengthSec,
+        url: `https://www.youtube.com/watch?v=${watchId}`,
+        provider: YtWatchProvider
     }
+}
 
-    get url(): string {
-        return `https://www.youtube.com/watch?v=${this.watchId}`;
-    }
 
-    constructor(watchId: string, title: string, channel: string, lengthSec?: number) {
-        this.watchId = watchId;
-        this.title = title;
-        this.channel = channel;
-        this.lengthSec = lengthSec;
-    }
+function assert(item: unknown): item is YtWatchItem {
+    if (typeof item !== 'object' || item === null) return false;
+    if (typeof (item as YtWatchItem).type !== 'string') return false;
+    if ((item as YtWatchItem).type !== 'YT_WATCH') return false;
+    if (typeof (item as YtWatchItem).watchId !== 'string') return false;
+    if (typeof (item as YtWatchItem).title !== 'string') return false;
+    if (typeof (item as YtWatchItem).author !== 'string') return false;
+    if (typeof (item as YtWatchItem).url !== 'string') return false;
+    if (typeof (item as YtWatchItem).lengthSec !== 'number' && (item as YtWatchItem).lengthSec !== undefined) return false;
+    return true;
+}
 
-    private static assert(item: any): item is YtWatchItem {
-        if (item.type !== 'YT_WATCH' ||
-            typeof item.watchId !== 'string' ||
-            typeof item.title !== 'string' ||
-            typeof item.channel !== 'string' ||
-            (typeof item.lengthSeconds !== 'number' && typeof item.lengthSeconds !== 'undefined')) return false;
-        return true;
-    }
-
-    static assertAndInstantiate(item: any) {
-        if(!this.assert(item)) return undefined;
-        return new YtWatchItem(item.watchId, item.title, item.channel, item.lengthSec);
-    }
+export function assertAndInstantiate(item: unknown): YtWatchItem | undefined {
+    if (!assert(item)) return undefined;
+    return { ...item };
 }
 
 async function fetchYtWatchItem(watchId: string) {
@@ -71,12 +68,11 @@ async function fetchYtWatchItem(watchId: string) {
         const lengthSeconds = videoDetail['lengthSeconds'];
         const channel = videoDetail['author'];
 
-        return new YtWatchItem(watchId, title, channel, lengthSeconds);
+        return createYtWatchItem(watchId, title, channel, lengthSeconds);
     } catch (error) {
         console.log(error);
         return null;
     }
-
 
 }
 
@@ -85,39 +81,34 @@ async function fetchListAsync(url: URL, emitItem: (item: YtWatchItem) => void, p
     const listId = url.searchParams.get('list');
     if (!listId) return;
 
-    progress?.({ message: '再生リストをフェッチ中...' });
+    progress?.({ message: 'Fetching a playlist...' });
     let count = 0;
     await fetchYtPlaylist(listId, config.rizumu_headless, config.rizumu_playlist_fetch_desktop, (item) => {
         emitItem(item);
 
         count++;
         if (count % 100 == 0) {
-            progress?.({ message: `再生リストをフェッチ中: ${count} アイテム` });
+            progress?.({ message: `Fetching a playlist: ${count} items fetched` });
         }
     }, ct)
 }
 
-export default class YtWatchProvider implements RizumuProvider {
-    get itemClassDefinition() {
-        return YtWatchItem;
-    }
-
-    match(url: URL): boolean {
+const YtWatchProvider: RizumuProvider = {
+    match: (url: URL) => {
         if (url.hostname.endsWith('youtube.com')) {
             return url.pathname === '/watch' || url.pathname === '/playlist';
         } else if (url.hostname.endsWith('youtu.be')) {
             return true;
         }
         return false;
-    }
-
-    async processAsync(url: URL, emitItem: (item: YtWatchItem) => void, progress?: ProgressCallback, ct?: ICancellationToken): Promise<void> {
+    },
+    processAsync: async (url: URL, emitItem: (item: YtWatchItem) => void, progress?: ProgressCallback, ct?: ICancellationToken) => {
         if (url.hostname.endsWith('youtube.com')) {
             if (url.pathname === '/watch') {
                 const watchId = url.searchParams.get('v');
                 if (!watchId) return;
                 const fetched = await fetchYtWatchItem(watchId);
-                if (ct?.isCancellationRequested) throw new PublicError("キャンセルされました。");
+                if (ct?.isCancellationRequested) throw new PublicError("Canceled.");
                 if (fetched) emitItem(fetched);
             } else if (url.pathname === '/playlist') {
                 await fetchListAsync(url, emitItem, progress, ct);
@@ -125,15 +116,14 @@ export default class YtWatchProvider implements RizumuProvider {
         } else if (url.hostname.endsWith('youtu.be')) {
             const watchId = url.pathname.substring(1);
             const fetched = await fetchYtWatchItem(watchId);
-            if (ct?.isCancellationRequested) throw new PublicError("キャンセルされました。");
+            if (ct?.isCancellationRequested) throw new PublicError("Canceled.");
             if (fetched) emitItem(fetched);
         }
-    }
-
-    async playItemAsync(rizumu: Rizumu, item: YtWatchItem): Promise<void> {
+    },
+    playItemAsync: async (rizumu: Rizumu, item: YtWatchItem) => {
         const url = new URL(`https://m.youtube.com/watch?app=m&v=${item.watchId}`);
         await rizumu.playUrlAsync(url, path.join(__dirname, 'YtWatchPreload.js'));
     }
-
-
 }
+
+export default YtWatchProvider;

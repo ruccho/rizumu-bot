@@ -1,46 +1,39 @@
-import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, CacheType, EmbedBuilder, Colors, VoiceBasedChannel, GuildMember, CommandInteraction, Guild, AttachmentBuilder } from "discord.js";
+import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, CacheType, EmbedBuilder, Colors } from "discord.js";
 import { GuildState } from "../State";
-import { followUpError, getErrorEmbed, RizumuCommand } from "../CommandManager";
+import { getErrorEmbed, RizumuCommand } from "../CommandManager";
 
-import config from '../Config';
-import { entersState, getVoiceConnection, joinVoiceChannel, VoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
-import Rizumu from "../Rizumu";
-import YtWatchProvider from "../providers/yt/YtWatchProvider";
-
-const silentMode = config.rizumu_silent;
-const headlessMode = config.rizumu_headless;
-
-export default class QueueCommand implements RizumuCommand {
+const command: RizumuCommand = {
     setCommand(builder: SlashCommandSubcommandBuilder): void {
         builder
-        .setName('queue')
-        .setDescription('現在の再生キューを表示します。')
-    }
-    async execute(interaction: ChatInputCommandInteraction<CacheType>, guildState: GuildState, guild: Guild): Promise<void> {
-        let em;
+            .setName('queue')
+            .setDescription('Prints current items in the queue.')
+    },
+    async execute(interaction: ChatInputCommandInteraction<CacheType>, guildState: GuildState): Promise<void> {
 
         if (!guildState.runtime.rizumu) {
-            await interaction.reply({ embeds: [getErrorEmbed('なにも再生していません。')] });
+            await interaction.reply({ embeds: [getErrorEmbed('Rizumu is playing nothing')] });
             return;
         }
 
         const queue = guildState.runtime.rizumu.getQueue();
         if (queue.length == 0) {
-            await interaction.reply({ embeds: [getErrorEmbed('キューは空です。')] });
+            await interaction.reply({ embeds: [getErrorEmbed('Queue is empty.')] });
             return;
         }
 
         const count = Math.min(queue.length, 10);
-        em = new EmbedBuilder()
+        const em = new EmbedBuilder()
             .setTitle('Next up: ')
             .setColor(Colors.Grey);
 
         for (let i = 0; i < count; i++) {
             const item = queue[i];
-            em.addFields({name: `#${i}`, value: item.title});
+            em.addFields({ name: `#${i}`, value: item.title });
         }
 
         await interaction.reply({ embeds: [em] });
     }
 
 }
+
+export default command;

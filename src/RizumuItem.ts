@@ -1,7 +1,17 @@
-export default interface RizumuItem {
-    get type(): string;
-    get title(): string;
-    get author(): string;
-    get url(): string;
-    get lengthSec(): number | undefined;
- }
+import { RizumuProvider } from "./providers/RizumuProvider"
+import Rizumu from "./Rizumu"
+
+type RizumuItem = {
+    type: string
+    title: string
+    author: string
+    url: string
+    lengthSec?: number,
+    provider: RizumuProvider
+}
+
+export async function playItemAsync(rizumu: Rizumu, item: RizumuItem) {
+    await item.provider.playItemAsync(rizumu, item);
+}
+
+export default RizumuItem;

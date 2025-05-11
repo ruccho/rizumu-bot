@@ -1,28 +1,20 @@
-import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, CacheType, EmbedBuilder, Colors, VoiceBasedChannel, GuildMember, CommandInteraction, Guild } from "discord.js";
+import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, CacheType, EmbedBuilder, Colors } from "discord.js";
 import { GuildState } from "../State";
-import { followUpError, RizumuCommand } from "../CommandManager";
+import { RizumuCommand } from "../CommandManager";
 
-import config from '../Config';
-import { entersState, getVoiceConnection, joinVoiceChannel, VoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
-import Rizumu from "../Rizumu";
-import YtWatchProvider from "../providers/yt/YtWatchProvider";
-
-const silentMode = config.rizumu_silent;
-const headlessMode = config.rizumu_headless;
-
-export default class NextCommand implements RizumuCommand {
+const command: RizumuCommand = {
     setCommand(builder: SlashCommandSubcommandBuilder): void {
         builder
             .setName('next')
-            .setDescription('次の曲へ移ります。')
-    }
-    async execute(interaction: ChatInputCommandInteraction<CacheType>, guildState: GuildState, guild: Guild): Promise<void> {
+            .setDescription('Skips current song.')
+    },
+    async execute(interaction: ChatInputCommandInteraction<CacheType>, guildState: GuildState): Promise<void> {
 
         let em;
 
         if (!guildState.runtime.rizumu) {
             em = new EmbedBuilder()
-                .setDescription(`なにも再生していません。`)
+                .setDescription(`Rizumu is playing nothing.`)
                 .setColor(Colors.Grey);
             await interaction.reply({ embeds: [em] });
             return;
@@ -40,3 +32,5 @@ export default class NextCommand implements RizumuCommand {
     }
 
 }
+
+export default command;

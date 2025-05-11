@@ -7,19 +7,19 @@ const { rizumu_command_prefix, discord_token, discord_client_id } = config;
 const rest = new REST({ version: '9' }).setToken(discord_token);
 const clientId = discord_client_id;
 
-export interface RizumuCommand {
+export type RizumuCommand = {
     setCommand(builder: SlashCommandSubcommandBuilder): void;
     execute(interaction: ChatInputCommandInteraction, guildState: GuildState, guild: Guild): Promise<void>
 }
 
 export function getGuildState(guildId: string) {
-    return state.guilds[guildId];
+    return state.guilds[guildId] ?? (state.guilds[guildId] = { id: guildId, commandVersion: 0, runtime: {} });
 }
 
 
 export function getErrorEmbed(message: string) {
     return new EmbedBuilder()
-        .setTitle('❌ エラー')
+        .setTitle('❌ Error')
         .setDescription(message)
         .setColor(Colors.Red);
 }
@@ -35,7 +35,7 @@ export class CommandManager {
 
         this.builder = new SlashCommandBuilder()
             .setName(rizumu_command_prefix)
-            .setDescription('Rizumu botをコントロールします。');
+            .setDescription('Controls Rizumu.');
 
         this.commands = {};
 
@@ -77,8 +77,8 @@ export class CommandManager {
         if (!guildState) {
 
             const em = new EmbedBuilder()
-                .setTitle('❌ エラー')
-                .setDescription('このサーバーでは現在Rizumuを使用できません。')
+                .setTitle('❌ Error')
+                .setDescription('Rizumu is not available for this server.')
                 .setColor(Colors.Red);
             await interaction.reply({ embeds: [em] });
 

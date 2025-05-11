@@ -1,32 +1,21 @@
-import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, CacheType, EmbedBuilder, Colors, VoiceBasedChannel, GuildMember, CommandInteraction, Guild, AttachmentBuilder } from "discord.js";
+import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, CacheType, EmbedBuilder, Colors, AttachmentBuilder } from "discord.js";
 import { GuildState } from "../State";
 import { followUpError, RizumuCommand } from "../CommandManager";
 
-import config from '../Config';
-import { entersState, getVoiceConnection, joinVoiceChannel, VoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
-import Rizumu from "../Rizumu";
-import YtWatchProvider from "../providers/yt/YtWatchProvider";
-
-const silentMode = config.rizumu_silent;
-const headlessMode = config.rizumu_headless;
-
-export default class CaptureCommand implements RizumuCommand {
+const command: RizumuCommand = {
     setCommand(builder: SlashCommandSubcommandBuilder): void {
         builder
             .setName('capture')
-            .setDescription('現在のRizumuの画面を表示します。')
-    }
-    async execute(interaction: ChatInputCommandInteraction<CacheType>, guildState: GuildState, guild: Guild): Promise<void> {
-
-
-        let em;
+            .setDescription('Shows current screenshot of Rizumu.')
+    },
+    async execute(interaction: ChatInputCommandInteraction<CacheType>, guildState: GuildState): Promise<void> {
 
         if (!guildState.runtime.rizumu) {
-            await followUpError(interaction, 'Rizumuが非アクティブです。');
+            await followUpError(interaction, 'Rizumu is inactive.');
             return;
         }
-        em = new EmbedBuilder()
-            .setDescription('キャプチャを作成中...')
+        const em = new EmbedBuilder()
+            .setDescription('Taking a screenshot...')
             .setColor(Colors.Grey);
         await interaction.reply({ embeds: [em] });
 
@@ -39,5 +28,5 @@ export default class CaptureCommand implements RizumuCommand {
 
         await interaction.followUp({ files: [file] });
     }
-
 }
+export default command;

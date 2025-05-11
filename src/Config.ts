@@ -8,4 +8,6 @@ type Config = {
     rizumu_playlist_fetch_desktop: boolean;
 }
 
-export default require('../state/config.json') as Config;
+import * as data from '../state/config.json'
+
+export default data as Config;

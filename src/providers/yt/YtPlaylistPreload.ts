@@ -1,6 +1,6 @@
-import { ipcRenderer, contextBridge } from "electron";
+import { ipcRenderer } from "electron";
 
-declare var window: Window & {
+declare let window: Window & {
     rizumu: {
         instanceId: string;
     }
@@ -10,7 +10,7 @@ const instanceId = (new URL(location.href)).searchParams.get("rizumu_instance_id
 
 console.log(`YtPlaylistPreload for ${instanceId}`);
 
-document.addEventListener("DOMContentLoaded", (e) =>{
+document.addEventListener("DOMContentLoaded", () => {
     refreshPlaylist();
 })
 
@@ -31,7 +31,6 @@ function refreshPlaylist() {
         return;
     }
 
-    //10秒経っても始まらなければ完了あつかい
     fetchPlaylistInitialTimeoutId = window.setTimeout(() => {
         console.log("fetchPlaylistKernel timeout!")
         ipcRenderer.send(`st-playlist-item-${instanceId}`, null);
