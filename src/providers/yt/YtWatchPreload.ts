@@ -1,7 +1,7 @@
 import { addBypassProcessorModule } from "../../RizumuPreloadLib";
-import { ipcRenderer, contextBridge } from "electron";
+import { ipcRenderer } from "electron";
 
-declare var window: Window & {
+declare let window: Window & {
     rizumu: {
         instanceId: string;
     }
@@ -19,7 +19,7 @@ const audioContext = new AudioContext({
 
 let bypass: BypassNode | undefined = undefined;
 
-window.addEventListener("load", async (e) => {
+window.addEventListener("load", async () => {
     console.log("onload");
     if (!bypass) await initializeBypass();
     refreshWatch();
@@ -35,7 +35,7 @@ function waitForElement(container: Element, selector: string, subtree: boolean, 
         }
     }
 
-    const observer: MutationObserver = new MutationObserver(records => {
+    const observer: MutationObserver = new MutationObserver(() => {
         const target = container.querySelector(selector);
         if (target) {
             observer.disconnect();
@@ -52,7 +52,7 @@ function waitForElement(container: Element, selector: string, subtree: boolean, 
 let adSkipObserver: MutationObserver | undefined = undefined;
 let popupObserver: MutationObserver | undefined = undefined;
 let videoObserver: MutationObserver | undefined = undefined;
-let autoplayObserver: MutationObserver | undefined = undefined;
+// const autoplayObserver: MutationObserver | undefined = undefined;
 let errorObserver: MutationObserver | undefined = undefined;
 
 function refreshWatch() {
@@ -75,7 +75,7 @@ function refreshWatch() {
         }
 
         if (errorObserver) errorObserver.disconnect();
-        errorObserver = new MutationObserver(records => {
+        errorObserver = new MutationObserver(() => {
             if (checkForError(coverContainer)) {
                 ipcRenderer.send(`st-video-end-${instanceId}`, null);
             }
@@ -92,7 +92,7 @@ function refreshWatch() {
         hookVideo(video);
 
         if (videoObserver) videoObserver.disconnect();
-        videoObserver = new MutationObserver(records => {
+        videoObserver = new MutationObserver(() => {
             console.log("video src mutation: " + video.src);
             hookVideo(video);
         })
@@ -109,7 +109,7 @@ function refreshWatch() {
 
         video.addEventListener('ended', onEnded);
 
-        video.addEventListener('pause', e => {
+        video.addEventListener('pause', () => {
             console.log('Video paused.');
             console.log(`video duration: ${video.duration}, current: ${video.currentTime}, src: ${video.currentSrc}`);
 
@@ -124,17 +124,17 @@ function refreshWatch() {
             //ipcRenderer.send(`st-video-end-${instanceId}`, null);
         });
 
-        video.addEventListener("emptied", (e) => {
+        video.addEventListener("emptied", () => {
             console.log("emptied");
         })
     }
 
-    //for mobile 
+    // for mobile 
     waitForElement(document.querySelector('.html5-video-player')!, '.video-ads.ytp-ad-module', false, (adModule) => {
         skipAds(adModule, video!);
 
         if (adSkipObserver) adSkipObserver.disconnect();
-        adSkipObserver = new MutationObserver(records => {
+        adSkipObserver = new MutationObserver(() => {
             skipAds(adModule, video!);
         })
 
@@ -145,8 +145,8 @@ function refreshWatch() {
         console.log('Ad skipping hooked.');
     });
 
-    //自動再生をオフ
-    waitForElement(document.querySelector('#player-control-container')!, '.ytm-autonav-toggle-button-container', true, (autonavButton) => {
+    // disable autoplay
+    waitForElement(document.querySelector('#player-control-container')!, '.ytm-autonav-toggle-button-container', true, () => {
         disableAutoplay();
     });
 
@@ -154,11 +154,11 @@ function refreshWatch() {
     if (popup) {
 
         if (popupObserver) popupObserver.disconnect();
-        popupObserver = new MutationObserver(records => {
+        popupObserver = new MutationObserver(() => {
 
             const dialogs = popup.querySelectorAll<HTMLElement>('tp-yt-paper-dialog');
             for (let i = 0; i < dialogs.length; i++) {
-                let dialog = dialogs[i];
+                const dialog = dialogs[i];
                 if (dialog.style.display !== 'none') {
                     const b = dialog.querySelector('a');
                     if (b) {

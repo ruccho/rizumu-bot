@@ -1,4 +1,4 @@
-import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, CacheType, EmbedBuilder, Colors, VoiceBasedChannel, GuildMember, CommandInteraction, Guild } from "discord.js";
+import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction, CacheType, EmbedBuilder, Colors, VoiceBasedChannel, GuildMember, Guild } from "discord.js";
 import { GuildState } from "../State";
 import { followUpError, RizumuCommand } from "../CommandManager";
 
@@ -11,13 +11,13 @@ import { PublicError } from "../PublicError";
 const silentMode = config.rizumu_silent;
 const headlessMode = config.rizumu_headless;
 
-export default class PlayCommand implements RizumuCommand {
+const command: RizumuCommand = {
     setCommand(builder: SlashCommandSubcommandBuilder): void {
         builder
             .setName('play')
-            .setDescription('動画またはプレイリストをキューに追加して再生します。')
-            .addStringOption(option => option.setName('url').setDescription('再生するURL').setRequired(true));
-    }
+            .setDescription('Queues single video or playlist to the queue and plays them.')
+            .addStringOption(option => option.setName('url').setDescription('URL to play').setRequired(true));
+    },
 
     async execute(interaction: ChatInputCommandInteraction<CacheType>, guildState: GuildState, guild: Guild): Promise<void> {
 
@@ -29,7 +29,7 @@ export default class PlayCommand implements RizumuCommand {
 
         let em;
         em = new EmbedBuilder()
-            .setDescription('▶ 接続中...')
+            .setDescription('▶ Connecting...')
             .setColor(Colors.Grey);
         await interaction.reply({ embeds: [em] });
 
@@ -38,7 +38,7 @@ export default class PlayCommand implements RizumuCommand {
             //join voiceChannel
             const channel = (interaction.member as GuildMember).voice.channel;
             if (!channel) {
-                await followUpError(interaction, 'ボイスチャンネルに参加してから使用してください。');
+                await followUpError(interaction, 'Use this command after joining to any voice channel.');
                 return;
             }
             voiceChannel = channel;
@@ -59,12 +59,12 @@ export default class PlayCommand implements RizumuCommand {
                     adapterCreator: guild.voiceAdapterCreator,
                 });
 
-                //workaround for https://github.com/discordjs/discord.js/issues/9185
+                // workaround for https://github.com/discordjs/discord.js/issues/9185
                 connection.on('stateChange', (oldState, newState) => {
                     const oldNetworking = Reflect.get(oldState, 'networking');
                     const newNetworking = Reflect.get(newState, 'networking');
 
-                    const networkStateChangeHandler = (oldNetworkState: any, newNetworkState: any) => {
+                    const networkStateChangeHandler = (oldNetworkState: object, newNetworkState: object) => {
                         const newUdp = Reflect.get(newNetworkState, 'udp');
                         clearInterval(newUdp?.keepAliveInterval);
                     }
@@ -106,7 +106,7 @@ export default class PlayCommand implements RizumuCommand {
         if (!guildState.runtime.rizumu) {
 
             em = new EmbedBuilder()
-                .setDescription('▶ Rizumuを起動中...')
+                .setDescription('▶ Starting Rizumu...')
                 .setColor(Colors.Grey);
             await interaction.editReply({ embeds: [em] });
 
@@ -114,7 +114,7 @@ export default class PlayCommand implements RizumuCommand {
             guildState.runtime.rizumu = new Rizumu({
                 headless: headlessMode,
                 providers: [
-                    new YtWatchProvider()
+                    YtWatchProvider
                 ]
             });
         }
@@ -135,20 +135,21 @@ export default class PlayCommand implements RizumuCommand {
                 await interaction.editReply({ embeds: [em] });
             });
         } catch (error) {
-            if(error instanceof PublicError)
-            {
+            if (error instanceof PublicError) {
                 await followUpError(interaction, error.message);
-            }else{
-                await followUpError(interaction, '失敗しました。');
+            } else {
+                await followUpError(interaction, 'Failed.');
             }
             throw error;
         }
         em = new EmbedBuilder()
-            .setTitle('▶ 完了')
-            .setDescription('アイテムがキューに追加されました。')
-            .addFields({ name: '追加されたアイテム', value: urlStr })
+            .setTitle('▶ Ready')
+            .setDescription('Items added to the queue.')
+            .addFields({ name: 'Items:', value: urlStr })
             .setColor(Colors.Aqua);
         await interaction.editReply({ embeds: [em] });
     }
 
 }
+
+export default command;

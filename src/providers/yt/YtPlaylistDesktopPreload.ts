@@ -1,6 +1,6 @@
-import { ipcRenderer, contextBridge } from "electron";
+import { ipcRenderer } from "electron";
 
-declare var window: Window & {
+declare let window: Window & {
     rizumu: {
         instanceId: string;
     }
@@ -10,7 +10,7 @@ const instanceId = (new URL(location.href)).searchParams.get("rizumu_instance_id
 
 console.log(`YtPlaylistDesktopPreload for ${instanceId}`);
 
-document.addEventListener("DOMContentLoaded", (e) => {
+document.addEventListener("DOMContentLoaded", () => {
     refreshPlaylist();
 })
 
@@ -31,7 +31,7 @@ function waitForElement(container: Element, selector: string, subtree: boolean, 
         }
     }
 
-    const observer: MutationObserver = new MutationObserver(records => {
+    const observer: MutationObserver = new MutationObserver(() => {
         const target = container.querySelector(selector);
         if (target) {
             observer.disconnect();
@@ -68,9 +68,9 @@ function refreshPlaylist() {
                 if (fetchPlaylistTimeoutId) clearTimeout(fetchPlaylistTimeoutId);
                 return;
             }
-    
+
             ipcRenderer.send(`st-playlist-item-${instanceId}`, item);
-    
+
         });
     })
 
@@ -83,7 +83,6 @@ function refreshPlaylist() {
     }
     */
 
-    //10秒経っても始まらなければ完了あつかい
     fetchPlaylistInitialTimeoutId = window.setTimeout(() => {
         console.log("fetchPlaylistKernel timeout!")
         ipcRenderer.send(`st-playlist-item-${instanceId}`, null);

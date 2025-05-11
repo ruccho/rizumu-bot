@@ -1,7 +1,7 @@
-import { BrowserWindow, ipcMain } from "electron";
+import { ipcMain } from "electron";
 import * as uuid from 'uuid';
 import * as path from 'path';
-import { YtWatchItem } from "./YtWatchProvider";
+import { assertAndInstantiate, YtWatchItem } from "./YtWatchProvider";
 import { BrowserContainer } from "../../BrowserContainer";
 import { PublicError } from "../../PublicError";
 import { ICancellationToken } from "../../CancellationToken";
@@ -10,11 +10,13 @@ function log(instanceId: string, message: string) {
     console.log(`[${instanceId}] [PLAYLIST] ${message}`);
 }
 
-function sendApi(window: BrowserWindow, instanceId: string, eventName: string, data: any) {
+/*
+function sendApi(window: BrowserWindow, instanceId: string, eventName: string, data: unknown) {
     const channel = `${eventName}-${instanceId}`;
     log(instanceId, `sending on ${channel}`);
     window.webContents.send(channel, data);
 }
+*/
 
 function onApi<T>(instanceId: string, eventName: string, listener: (data: T) => void) {
     const channel = `${eventName}-${instanceId}`;
@@ -52,7 +54,7 @@ export default async function fetchYtPlaylist(listId: string, headless: boolean,
         timeoutId: undefined
     };
 
-    const cancellationError = new PublicError("キャンセルされました。");
+    const cancellationError = new PublicError("Canceled.");
 
     if (ct?.isCancellationRequested) throw cancellationError;
 
@@ -61,7 +63,7 @@ export default async function fetchYtPlaylist(listId: string, headless: boolean,
         const completePromise = new Promise<void>((res, rej) => {
             const fetchTimeout = () => {
                 log(instanceId, "Playlist fetching timed out.");
-                rej(new PublicError("プレイリストの取得がタイムアウトしました。"));
+                rej(new PublicError("Playlist fetching timed out."));
             };
 
             state.timeoutId = setTimeout(fetchTimeout, fetchTimeoutMs);
@@ -81,7 +83,7 @@ export default async function fetchYtPlaylist(listId: string, headless: boolean,
 
                     state.timeoutId = setTimeout(fetchTimeout, fetchTimeoutMs);
 
-                    const fined = YtWatchItem.assertAndInstantiate(item);
+                    const fined = assertAndInstantiate(item);
                     if (fined) onItem(fined);
                     else log(instanceId, `Unsupported item: ${item.type}`);
                 } else {

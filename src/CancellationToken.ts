@@ -1,6 +1,5 @@
 
-export interface ICancellationSubscription
-{
+export interface ICancellationSubscription {
     dispose(): void;
 }
 
@@ -14,13 +13,11 @@ export interface ICancellationTokenSource {
     readonly token: ICancellationToken;
 }
 
-class CancellationSubscription implements ICancellationSubscription
-{
+class CancellationSubscription implements ICancellationSubscription {
     private token: CancellationToken;
     private onCancellationRequested: () => void;
 
-    constructor(token: CancellationToken, onCancellationRequested: () => void)
-    {
+    constructor(token: CancellationToken, onCancellationRequested: () => void) {
         this.token = token;
         this.onCancellationRequested = onCancellationRequested;
     }
@@ -39,10 +36,9 @@ class CancellationToken implements ICancellationToken {
     }
 
     cancel() {
-        if(this._isCancellationRequested) return;
+        if (this._isCancellationRequested) return;
         this._isCancellationRequested = true;
-        for(const k of this.onCancellationRequested)
-        {
+        for (const k of this.onCancellationRequested) {
             k();
         }
     }
@@ -52,10 +48,9 @@ class CancellationToken implements ICancellationToken {
         return new CancellationSubscription(this, onCancellationRequested);
     }
 
-    unsubscribe(onCancellationRequested: () => void)
-    {
+    unsubscribe(onCancellationRequested: () => void) {
         const index = this.onCancellationRequested.indexOf(onCancellationRequested);
-        if(index >= 0) this.onCancellationRequested.splice(index, 1);
+        if (index >= 0) this.onCancellationRequested.splice(index, 1);
     }
 }
 

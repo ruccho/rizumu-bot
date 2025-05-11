@@ -1,12 +1,12 @@
 import { AudioPlayerStatus, createAudioPlayer, NoSubscriberBehavior, createAudioResource, StreamType, AudioPlayer } from '@discordjs/voice';
-import { BrowserWindow, ipcMain, webContents } from 'electron';
+import { ipcMain } from 'electron';
 import { Readable } from 'stream';
 import * as uuid from 'uuid';
 import { BrowserContainer } from './BrowserContainer';
 import { CancellationTokenSource } from './CancellationToken';
-import ProviderManager from './providers/ProviderManager';
+import ProviderManager, { createProviderManager, processUrlAsync } from './providers/ProviderManager';
 import { RizumuProvider } from './providers/RizumuProvider';
-import RizumuItem from './RizumuItem';
+import RizumuItem, { playItemAsync } from './RizumuItem';
 
 
 export type ProgressCallback = (data: { message: string }) => void;
@@ -25,7 +25,7 @@ class Rizumu {
     }
 
     private _headless: boolean;
-    
+
     private _queue: RizumuItem[] = [];
     private _isBusy: boolean = false;
     private _playingItem?: RizumuItem;
@@ -35,7 +35,7 @@ class Rizumu {
 
     private _player?: AudioPlayer;
 
-    private providers: ProviderManager = new ProviderManager();
+    private readonly providers: ProviderManager;
 
     private browser: BrowserContainer;
 
@@ -48,9 +48,7 @@ class Rizumu {
         this._instanceId = instanceId;
         this._headless = options.headless;
 
-        for (const provider of options.providers) {
-            this.providers.registerProvider(provider);
-        }
+        this.providers = createProviderManager(options.providers);
 
         this.browser = new BrowserContainer(this._headless, this.instanceId, "BROWSER");
 
@@ -83,7 +81,7 @@ class Rizumu {
 
         this._onApi<{ url: string }>('st-url-changed', data => {
             this._log(`st-url-changed ${data.url}`);
-            for (let res of this._onUrlChanged) {
+            for (const res of this._onUrlChanged) {
                 res(data.url);
             }
             this._onUrlChanged.splice(0);
@@ -198,15 +196,15 @@ class Rizumu {
 
     async pushUrlAsync(url: URL, progress?: ProgressCallback) {
         if (this._isBusy) {
-            throw new Error('別の処理が実行中です。');
+            throw new Error('Rizumu is busy.');
         }
-        
+
         this.processCancellation.cancel();
         this.processCancellation.reset();
 
         this._isBusy = true;
         try {
-            await this.providers.processAsync(url, (item) => {
+            await processUrlAsync(this.providers, url, (item) => {
                 this.enqueueItem(item, true);
             }, progress, this.processCancellation.token);
         } finally {
@@ -234,48 +232,15 @@ class Rizumu {
 
     async playUrlAsync(url: URL, preloadPath: string) {
         this._log(`playing ${url.toString()}`);
-        /*
-        this._sendApi('op-play-watch',
-            {
-                url: url.toString(),
-                preload: preloadPath
-            });
-            */
 
         this.browser.open(url.toString(), preloadPath);
-        /*
-    const newUrl = await this._waitForUrlAsync();
-    if (newUrl !== url.toString()) throw new Error(`Failed to navigate: ${url.toString()}`);
-    */
     }
 
     private async _playItemAsync(item: RizumuItem) {
         this._playingItem = item;
 
-        this.providers.playItemAsync(this, item);
-
+        await playItemAsync(this, item);
     }
-
-    /*
-    private _waitForUrlAsync() {
-        this._log(`_waitForUrlAsync(): waiting for next url`);
-        return new Promise<string>((res, rej) => {
-            this._onUrlChanged.push((url) => {
-                this._log(`_waitForUrlAsync(): resolved: ${url}`);
-                res(url);
-            });
-        })
-    }
-    */
-
-    /*
-    private _sendApi(eventName: string, data: any) {
-        const channel = `${eventName}-${this._instanceId}`;
-        console.log(`[RIZUMU] sending on ${channel}`);
-        //this._window.webContents.send(channel, data);
-        this.browser.currentWebContents?.send(channel, data);
-    }
-    */
 
     private _onApi<T>(eventName: string, listener: (arg: T) => void) {
         const channel = `${eventName}-${this._instanceId}`;
@@ -285,7 +250,7 @@ class Rizumu {
         });
     }
 
-    private _log(message: any) {
+    private _log(message: unknown) {
         console.log(`[${this._instanceId}] [RIZUMU] ${message}`)
     }
 }
