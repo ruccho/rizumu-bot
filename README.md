@@ -64,3 +64,22 @@ Use through slash commands (default prefix is `/r` and can be changed by `rizumu
 # Leave the channel
 /r leave
 ```
+
+## How it works
+
+Rizumu opens actual web page which plays audio and redirects the output to main process via [AudioWorklet](https://developer.mozilla.org/docs/Web/API/AudioWorklet) and IPC injected by the preload script.
+
+```mermaid
+flowchart TD
+    A[Video Source] --> B[HTMLMediaElement]
+    subgraph G[Renderer process]
+      B -->|Web Audio API| C[AudioWorklet]
+      subgraph Worker thread
+        C
+      end
+      C -->|MessagePort| F[Custom preload script]
+      F -.->|Control|B
+    end
+    F <-->|IPC| D[Main process]
+    D <-->|discord.js| E[Discord voice channel]
+```
