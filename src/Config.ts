@@ -8,6 +8,8 @@ type Config = {
     rizumu_playlist_fetch_desktop: boolean;
 }
 
-import * as data from '../state/config.json'
+import fs from 'fs';
+
+const data = JSON.parse(fs.readFileSync('../state/config.json', 'utf-8'));
 
 export default data as Config;
