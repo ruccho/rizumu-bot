@@ -25,9 +25,13 @@ function createYtWatchItem(watchId: string, title: string, channel: string, leng
     }
 }
 
+function assetObject(item: unknown): item is YtWatchItem {
+    return typeof item === 'object';
+}
+
 
 function assert(item: unknown): item is YtWatchItem {
-    if (typeof item !== 'object' || item === null) return false;
+    if (!assetObject(item)) return false;
     if (typeof (item as YtWatchItem).type !== 'string') return false;
     if ((item as YtWatchItem).type !== 'YT_WATCH') return false;
     if (typeof (item as YtWatchItem).watchId !== 'string') return false;
@@ -35,6 +39,7 @@ function assert(item: unknown): item is YtWatchItem {
     if (typeof (item as YtWatchItem).author !== 'string') return false;
     if (typeof (item as YtWatchItem).url !== 'string') return false;
     if (typeof (item as YtWatchItem).lengthSec !== 'number' && (item as YtWatchItem).lengthSec !== undefined) return false;
+    item['provider'] = YtWatchProvider; // Ensure provider is set
     return true;
 }
 

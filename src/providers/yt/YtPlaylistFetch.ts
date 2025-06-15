@@ -85,7 +85,7 @@ export default async function fetchYtPlaylist(listId: string, headless: boolean,
 
                     const fined = assertAndInstantiate(item);
                     if (fined) onItem(fined);
-                    else log(instanceId, `Unsupported item: ${item.type}`);
+                    else log(instanceId, `Unsupported item: ${JSON.stringify(item)}`);
                 } else {
                     log(instanceId, 'The list fully fetched');
                     res();
