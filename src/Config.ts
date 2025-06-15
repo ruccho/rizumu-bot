@@ -10,6 +10,6 @@ type Config = {
 
 import fs from 'fs';
 
-const data = JSON.parse(fs.readFileSync('../state/config.json', 'utf-8'));
+const data = JSON.parse(fs.readFileSync('state/config.json', 'utf-8'));
 
 export default data as Config;

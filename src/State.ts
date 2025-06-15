@@ -6,7 +6,7 @@ type State = {
     guilds: { [guildId: string]: GuildStateRaw }
 };
 
-const state = JSON.parse(fs.readFileSync('../state/state.json', 'utf-8')) as State;
+const state = JSON.parse(fs.readFileSync('state/state.json', 'utf-8')) as State;
 
 type GuildStateRaw = { id: string, commandVersion: number };
 export type GuildState = GuildStateRaw & {

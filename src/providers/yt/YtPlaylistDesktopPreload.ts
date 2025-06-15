@@ -96,11 +96,12 @@ let fetchPlaylistTimeoutId: number | undefined = undefined;
 function fetchPlaylistKernel(container: Element, position: number, callback: (
     completed: boolean,
     item: {
-        type: 'YT_WATCH',
-        title: string,
-        watchId: string,
-        channel: string,
-        lengthSeconds: number | undefined
+        type: 'YT_WATCH';
+        title: string
+        author: string
+        url: string
+        lengthSec?: number,
+        watchId: string;
     } | undefined) => void) {
     const innerContainer = container;
 
@@ -163,8 +164,9 @@ function fetchPlaylistKernel(container: Element, position: number, callback: (
                     type: 'YT_WATCH',
                     title: title,
                     watchId: watchId,
-                    channel: channel,
-                    lengthSeconds: lengthSeconds
+                    author: channel,
+                    url: "https://www.youtube.com/watch?v=" + watchId,
+                    lengthSec: lengthSeconds
                 });
         } catch (error) {
             console.error(error);
