@@ -8,5 +8,6 @@ const processorBlob = new Blob([processorSource.toString()], { type: 'text/javas
 const processorUrl = URL.createObjectURL(processorBlob);
 
 export async function addBypassProcessorModule(context: AudioContext) {
+    console.log(`loading bypass processor module from ${processorUrl}`);
     await context.audioWorklet.addModule(processorUrl);
 }
