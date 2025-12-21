@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, session } from 'electron';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 
 import config from './Config';
@@ -27,6 +27,17 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 
 async function intiializeElectron() {
     await app.whenReady();
+
+    // Modify CSP headers to allow data: URLs for AudioWorklet
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+        const csp = details.responseHeaders?.['content-security-policy'];
+        if (csp) {
+            details.responseHeaders!['content-security-policy'] = csp.map(policy =>
+                policy.replace(/script-src\s+([^;]*)/g, 'script-src $1 blob:')
+            );
+        }
+        callback({ responseHeaders: details.responseHeaders });
+    });
 
     const killBlock = new BrowserWindow({
         show: false
